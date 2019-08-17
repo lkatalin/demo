@@ -1,0 +1,9 @@
+[package]
+name = "attestation-tenant"
+version = "0.1.0"
+authors = ["LKatalin"]
+edition = "2018"
+
+[dependencies]
+sgx-isa = { version = "0.3.1", features = ["sgxstd"] }
+dcap-ql = "0.2.0"

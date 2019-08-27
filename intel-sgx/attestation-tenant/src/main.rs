@@ -19,10 +19,10 @@ use percent_encoding::percent_decode;
 
 fn verify_chain_issuers(
     root_cert: &openssl::x509::X509,
-    intermed_cert: &openssl::x509::X509//,
-    //pck_cert: &openssl::x509::X509,
+    intermed_cert: &openssl::x509::X509,
+    pck_cert: &openssl::x509::X509,
 ) {
-    //assert_eq!(intermed_cert.issued(&pck_cert), X509VerifyResult::OK);
+    assert_eq!(intermed_cert.issued(&pck_cert), X509VerifyResult::OK);
 
     assert_eq!(root_cert.issued(&intermed_cert), X509VerifyResult::OK);
 
@@ -31,8 +31,8 @@ fn verify_chain_issuers(
 
 fn verify_chain_sigs(
     root_cert: openssl::x509::X509,
-    intermed_cert: openssl::x509::X509//,
-    //pck_cert: openssl::x509::X509,
+    intermed_cert: openssl::x509::X509,
+    pck_cert: openssl::x509::X509,
 ) {
     // create new cert chain object and context
     let mut chain = Stack::new().unwrap();
@@ -49,12 +49,12 @@ fn verify_chain_sigs(
         .unwrap());
 
     // add intermediate cert to chain
-    //let _ = chain.push(intermed_cert);
+    let _ = chain.push(intermed_cert);
 
     // verify pck cert sig in context with intermed cert
-    //assert!(context
-    //    .init(&store, &pck_cert, &chain, |c| c.verify_cert())
-    //    .unwrap());
+    assert!(context
+        .init(&store, &pck_cert, &chain, |c| c.verify_cert())
+        .unwrap());
 
     // check root signature on itself
     assert!(context
@@ -63,17 +63,6 @@ fn verify_chain_sigs(
 
     println!("Signatures on certificate chain are valid...");
 }
-
-// checks that cert chain embedded in quote (root, intermed) matches
-// cert chain passed in by tenant
-//fn validate_chain(
-//    tenant_root_cert: &openssl::x509::X509,
-//    tenant_intermed_cert: &openssl::x509::X509,
-//    quote_root_cert: ,
-//    quote_intermed_cert: ) {
-    
-
-//}
 
 fn key_from_affine_coordinates(
     x: Vec<u8>,
@@ -176,10 +165,6 @@ fn verify_pck_hash(qe_report_body: &[u8], ak_pub: &[u8], qe_auth_data: &[u8]) {
     println!("QE Report's hash is valid....");
 }
 
-fn find_subsequence(haystack: &[u8], needle: &[u8]) -> Option<usize> {
-    haystack.windows(needle.len()).position(|window| window == needle)
-}
-
 fn main() {
     // request attestation from platform daemon
     let mut stream = TcpStream::connect("localhost:1034").unwrap();
@@ -195,21 +180,22 @@ fn main() {
     // ISV enclave report signature's signed material == first 432 bytes of quote
     let ak_signed = &quote[0..432].to_vec();
 
-    // parse out auth and cert data
+    // parse cert data and certificate chain from quote
     //let auth_and_cert_data = &quote[1012..].to_vec();
     //let auth_data_sizeof = &quote[1012..1014].to_vec();
     //let auth_data_data = &quote[1014..1046].to_vec();
-    let cert_data_type = &quote[1046..1048].to_vec();
-    let cert_data_sizeof = &quote[1048..1052].to_vec();
-    let quote_cert_data_data = &quote[1052..].to_vec();
-    //println!("cert data len is {}", quote_cert_data_data.len());
-    //println!("cert sizeof len is {}", cert_data_sizeof.len());
-
-    let cert_data_ascii = AsciiStr::from_ascii(quote_cert_data_data).unwrap();
-    //println!("cert data ascii: {}", cert_data_ascii);
+    //let cert_data_type = &quote[1046..1048].to_vec();
+    //let cert_data_sizeof = &quote[1048..1052].to_vec();
+    let cert_data = &quote[1052..].to_vec();
+    let cert_data_ascii = AsciiStr::from_ascii(cert_data).unwrap();
     let mut cert_data_ascii_decoded = percent_decode(cert_data_ascii.as_bytes()).decode_utf8().unwrap();
-    //println!("\n\ncert data ascii decoded: {}", cert_data_ascii_decoded);
+    let quote_pck_cert_chain = X509::stack_from_pem(&cert_data_ascii_decoded.to_mut()[..].as_bytes()).unwrap();
 
+    // get individual quote certs from quote's pck chain
+    let quote_leaf_cert = &quote_pck_cert_chain[0];
+    let _quote_intermed_cert = &quote_pck_cert_chain[1];
+    let _quote_root_cert = &quote_pck_cert_chain[2];
+    
     // make quote parseable and return quote signature section
     let quote = dcap_ql::quote::Quote::parse(&quote).unwrap();
     let q_sig = quote.signature::<Quote3SignatureEcdsaP256>().unwrap();
@@ -233,30 +219,17 @@ fn main() {
         panic!("Certificate chain must include exactly two certificates.");
     }
 
-    // grab individual tenant certs from chain
+    // get individual tenant certs from tenant's pck chain
     let tenant_intermed_cert = &pck_cert_chain[0];
     let tenant_root_cert = &pck_cert_chain[1];
     println!("Tenant's PCK cert chain loaded...");
 
-    //println!("cert chain raw contents: {}", cert_chain_contents);
-    //println!("cert chain raw hex contents: {:x?}", cert_chain_contents);
-
-    let print = tenant_intermed_cert.fingerprint(MessageDigest::sha256()).unwrap();
-    println!("tenant intermed fingerprint: {:?}", print);
-
-    let quote_pck_cert_chain = X509::stack_from_pem(&cert_data_ascii_decoded.to_mut()[..].as_bytes()).unwrap();
-    println!("quote pck chain length is {}", quote_pck_cert_chain.len());
-
-    //println!("cert data type: {:x?}", cert_data_type);
-    //println!("cert data size: {:x?}", cert_data_sizeof);
-    //println!("cert data: {:?}", quote_cert_data_data);
-
-
     // verify PCK certificate chain issuers and signatures
-    verify_chain_issuers(&tenant_root_cert, &tenant_intermed_cert);
+    verify_chain_issuers(&tenant_root_cert, &tenant_intermed_cert, &quote_leaf_cert);
     verify_chain_sigs(
         tenant_root_cert.clone(),
         tenant_intermed_cert.clone(),
+        quote_leaf_cert.clone()
     );
     println!("PCK cert chain verified...");
 
@@ -264,7 +237,7 @@ fn main() {
     verify_ak_sig(&q_att_key_pub, &ak_signed, q_enclave_report_sig.to_vec());
 
     // verify PCK's signature on AKpub
-    //verify_pck_sig(&pck_leaf_cert, &q_qe_report, &q_qe_report_sig);
+    verify_pck_sig(&quote_leaf_cert, &q_qe_report, &q_qe_report_sig);
 
     // verify hashed material signed by PCK is correct
     verify_pck_hash(&q_qe_report, &q_att_key_pub, &q_auth_data);

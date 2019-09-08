@@ -4,5 +4,8 @@ version = "0.1.0"
 authors = ["Lily Sturmann <lsturman@redhat.com>"]
 edition = "2018"
 
+
 [dependencies]
+# This dependency allows the use of Fortanix's data structures 
+# relating to SGX, ex. Report, TargetInfo.
 sgx-isa = { version = "0.3.1", features = ["sgxstd"] }

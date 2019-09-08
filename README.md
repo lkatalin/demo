@@ -13,7 +13,10 @@ A demonstration of remote attestation for an SGX enclave.
 ### Retrieving PCK certificate chain for Intel SGX Remote Attestation
 The root and intermediate certificates can be retrieved from [Intel's API](https://api.portal.trustedservices.intel.com/documentation#pcs-certificate) by using the following command, which parses the response from Intel and places is in a file:
 ```
-curl -v "https://api.trustedservices.intel.com/sgx/certification/v1/pckcrl?ca={processor}" 2>&1 | awk -F"SGX-PCK-CRL-Issuer-Chain: " '{print $2}' | sed -e :a -e 's@%@\\x@g;/./,$!d;/^\n*$/{$d;N;};/\n$/ba' | xargs -0 printf "%b" > pck_chain.pem
+curl -v "https://api.trustedservices.intel.com/sgx/certification/v1/pckcrl?ca=  
+{processor}" 2>&1 | awk -F"SGX-PCK-CRL-Issuer-Chain: " '{print $2}' | sed -e   
+:a -e 's@%@\\x@g;/./,$!d;/^\n*$/{$d;N;};/\n$/ba' | xargs -0 printf "%b" >   
+pck_chain.pem
 ```
 The output file, `pck_chain.pem`, will include the Intermediate and Root PCK certificates from Intel. 
 The Quote provided by the platform will include the complete certificate chain with these same Intermediate and Root certificates, as well as the PCK Leaf Certificate that is specific to the SGX-capable platform.

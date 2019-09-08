@@ -1,4 +1,3 @@
-extern crate dcap_ql;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 

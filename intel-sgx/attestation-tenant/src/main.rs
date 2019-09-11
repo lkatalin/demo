@@ -12,12 +12,100 @@ use openssl::{
     stack::Stack,
     x509::*,
 };
+//use failure::error::Error;
 use percent_encoding::percent_decode;
 use std::{
+    convert::TryFrom,
     env, fs,
     io::{Read, Write},
     net::TcpStream,
 };
+
+
+#[derive(Copy, Clone)]
+pub struct Signature {
+    r: [u8; 32],
+    s: [u8; 32],
+}
+
+impl std::fmt::Debug for Signature {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(
+            f,
+            "Signature {{ r: {:?}, s: {:?} }}",
+            self.r.iter(),
+            self.s.iter()
+        )
+    }
+}
+
+impl Eq for Signature {}
+impl PartialEq for Signature {
+    fn eq(&self, other: &Signature) -> bool {
+        self.r[..] == other.r[..] && self.s[..] == other.s[..]
+    }
+}
+
+impl Default for Signature {
+    fn default() -> Self {
+        Signature {
+            r: [0u8; 32],
+            s: [0u8; 32],
+        }
+    }
+}
+
+// turns ecdsa into Signature
+//impl From<EcdsaSig> for Signature {
+//    #[inline]
+//    fn from(value: EcdsaSig) -> Self {
+//        Signature {
+//            r: value.r().into_le(),
+//            s: value.s().into_le(),
+//        }
+//    }
+//}
+
+// turns &[u8] into Signature
+impl From<&[u8]> for Signature { 
+    #[inline]
+    fn from(value: &[u8]) -> Self {
+        let mut r: [u8; 32] = Default::default();
+        let mut s: [u8; 32] = Default::default();
+        r.copy_from_slice(&value[0..32]);
+        s.copy_from_slice(&value[32..64]);
+
+        Signature {
+            r: r,
+            s: s,
+        }
+    }
+    //#[inline]
+    //fn try_from(value: &[u8]) -> Result<Self> {
+    //    Ok(EcdsaSig::from_der(value)?.into())
+    //}
+}
+
+// turns Signature into ecdsa
+impl From<&Signature> for EcdsaSig {
+    //type Error = Error;
+
+    #[inline]
+    fn from(value: &Signature) -> Self {
+        let r = BigNum::from_slice(&value.r).unwrap();
+        let s = BigNum::from_slice(&value.s).unwrap();
+        EcdsaSig::from_private_components(r, s).unwrap()
+    }
+}
+
+impl From<&Signature> for Vec<u8> {
+    //type Error = Error;
+
+    #[inline]
+    fn from(value: &Signature) -> Self {
+        EcdsaSig::try_from(value).unwrap().to_der().unwrap()
+    }
+}
 
 fn verify_chain_issuers(
     root_cert: &openssl::x509::X509,
@@ -83,48 +171,6 @@ fn key_from_affine_coordinates(
     ec_key
 }
 
-// For the ASN.1 DER format, the top bit of the first byte of each encoding (r, s) 
-// must be zero.
-fn check_top_bit(val: [u8; 32]) -> Vec<u8> {
-    let mut vec: Vec<u8> = Vec::new();
-
-    // If the top bit is not zero, it pads the slice with a 0x00 byte.
-    if 0b10000000 & &val[0] != 0 {
-        vec.push(0x00 as u8);
-        vec.extend(val.to_vec());
-    } else {
-        vec.extend(val.to_vec());
-    }
-    vec
-}
-
-fn raw_ecdsa_to_asn1(ecdsa_sig: &Vec<u8>) -> Vec<u8> {
-    let mut r_init: [u8; 32] = Default::default();
-    let mut s_init: [u8; 32] = Default::default();
-    r_init.copy_from_slice(&ecdsa_sig[0..32]);
-    s_init.copy_from_slice(&ecdsa_sig[32..64]);
-
-    let r = check_top_bit(r_init);
-    let s = check_top_bit(s_init);
-
-    let r_len = r.len();
-    let s_len = s.len();
-    let asn1_marker_len = 4; // 2 bytes for r, 2 for s
-    let datalen = r_len + s_len + asn1_marker_len;
-
-    let mut vec = Vec::new();
-    vec.push(0x30); // This marks the start of ASN.1 encoding.
-    vec.push(datalen as u8); // This is the remaining data length.
-    vec.push(0x02 as u8); // This marks the start of an integer.
-    vec.push(r_len as u8); // This is the integer length.
-    vec.extend(r); // This is the r value.
-    vec.push(0x02 as u8); // This marks the start of an integer.
-    vec.push(s_len as u8); // This is the integer length.
-    vec.extend(s); // This is the s value.
-
-    vec
-}
-
 // This verifies the Attestation Key's signature on the quote header || report body.
 fn verify_ak_sig(ak: &[u8], signed: &[u8], ak_sig: Vec<u8>) {
     let xcoord = ak[0..32].to_owned();
@@ -136,7 +182,6 @@ fn verify_ak_sig(ak: &[u8], signed: &[u8], ak_sig: Vec<u8>) {
     let mut verifier = Verifier::new(MessageDigest::sha256(), &pkey).unwrap();
     verifier.update(signed).unwrap();
 
-    //let asn1_ak_sig = raw_ecdsa_to_asn1(&ak_sig);
     let r = BigNum::from_slice(&ak_sig[0..32]).unwrap();
     let s = BigNum::from_slice(&ak_sig[32..64]).unwrap();
     let ecdsa_ak_sig = EcdsaSig::from_private_components(r, s).unwrap();
@@ -154,9 +199,17 @@ fn verify_pck_sig(pck_cert: &openssl::x509::X509, qe_report_body: &[u8], qe_repo
     let mut verifier = Verifier::new(MessageDigest::sha256(), &pkey).unwrap();
     verifier.update(qe_report_body).unwrap();
 
-    let reportsig = raw_ecdsa_to_asn1(&qe_report_sig.to_vec());
+    // make a Signature
+    let sig = Signature::try_from(qe_report_sig);
+    println!("signature: {:?}", sig);
 
-    assert!(verifier.verify(&reportsig).unwrap());
+    //let reportsig = raw_ecdsa_to_asn1(&qe_report_sig.to_vec());
+    let r = BigNum::from_slice(&qe_report_sig.to_vec()[0..32]).unwrap();
+    let s = BigNum::from_slice(&qe_report_sig.to_vec()[32..64]).unwrap();
+    let ecdsa_reportsig = EcdsaSig::from_private_components(r, s).unwrap();
+    let der_reportsig = &ecdsa_reportsig.to_der().unwrap();
+
+    assert!(verifier.verify(&der_reportsig).unwrap());
     println!("PCK signature on AK is valid...");
 }
 

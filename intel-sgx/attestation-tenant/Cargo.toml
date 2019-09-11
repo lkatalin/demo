@@ -2,7 +2,7 @@
 name = "attestation-tenant"
 version = "0.1.0"
 authors = ["Lily Sturmann <lsturman@redhat.com>"]
-edition = "2019"
+edition = "2018"
 
 [dependencies]
 sgx-isa = { version = "0.3.1", features = ["sgxstd"] }

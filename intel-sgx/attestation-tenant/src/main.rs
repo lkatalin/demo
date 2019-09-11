@@ -1,7 +1,9 @@
 use ascii::AsciiStr;
 use dcap_ql::quote::*;
 use openssl::{
+    bn::BigNum,
     ec::{EcGroup, EcKey},
+    ecdsa::EcdsaSig,
     hash::MessageDigest,
     nid::Nid,
     pkey::PKey,
@@ -134,9 +136,14 @@ fn verify_ak_sig(ak: &[u8], signed: &[u8], ak_sig: Vec<u8>) {
     let mut verifier = Verifier::new(MessageDigest::sha256(), &pkey).unwrap();
     verifier.update(signed).unwrap();
 
-    let asn1_ak_sig = raw_ecdsa_to_asn1(&ak_sig);
+    //let asn1_ak_sig = raw_ecdsa_to_asn1(&ak_sig);
+    let r = BigNum::from_slice(&ak_sig[0..32]).unwrap();
+    let s = BigNum::from_slice(&ak_sig[32..64]).unwrap();
+    let ecdsa_ak_sig = EcdsaSig::from_private_components(r, s).unwrap();
 
-    assert!(verifier.verify(&asn1_ak_sig).unwrap());
+    let der_ak_sig = &ecdsa_ak_sig.to_der().unwrap();
+
+    assert!(verifier.verify(&der_ak_sig.as_slice()).unwrap());
     println!("AK signature on Quote header || report body is valid...");
 }
 

@@ -2,7 +2,7 @@
 name = "attestation-daemon"
 version = "0.1.0"
 authors = ["Lily Sturmann <lsturman@redhat.com>"]
-edition = "2018"
+edition = "2019"
 
 [dependencies]
 openssl = "0.10.23"

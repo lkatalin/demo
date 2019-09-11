@@ -2,10 +2,13 @@
 name = "attestation-enclave"
 version = "0.1.0"
 authors = ["Lily Sturmann <lsturman@redhat.com>"]
-edition = "2018"
+edition = "2019"
 
 
 [dependencies]
-# This dependency allows the use of Fortanix's data structures 
-# relating to SGX, ex. Report, TargetInfo.
+# This crate allows the use of Fortanix's data structures 
+# relating to SGX, ex. Report, TargetInfo. The sgxstd feature
+# should be enabled when using std::os::fortanix_sgx functionality,
+# ex. ENCLU[EGETKEY] and ENCLU[EREPORT].
+# See more: https://edp.fortanix.com/docs/api/std/os/fortanix_sgx/index.html
 sgx-isa = { version = "0.3.1", features = ["sgxstd"] }

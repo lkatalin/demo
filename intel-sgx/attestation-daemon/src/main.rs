@@ -25,8 +25,9 @@ fn main() {
             .expect("Could not read report");
         let report = sgx_isa::Report::try_copy_from(&report_buf).unwrap();
 
-        // The attestation daemon gets a Quote from the Quoting Enclave for the Report. This
-        // verifies the Report as genuine according to the platform's Quoting Enclave. 
+        // The attestation daemon gets a Quote from the Quoting Enclave for the Report. 
+        // The Quoting Enclave verifies the Report's MAC as a prerequisite for generating 
+        // the Quote. The Quote is signed with the Quoting Enclave's Attestation Key.
         let quote = dcap_ql::quote(&report).expect("Could not generate quote.");
         println!("\nQuote successfully generated...");
 

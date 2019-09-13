@@ -15,6 +15,7 @@ use openssl::{
 };
 use percent_encoding::percent_decode;
 use std::{
+    iter::Iterator,
     convert::TryFrom,
     env, fs,
     io::{Read, Write},
@@ -38,15 +39,17 @@ impl Default for CertChain {
      }
 }
 
-
 impl CertChain {
-    pub fn len_ok(self) -> bool {
-        if self.chain.len() > self.max_len 
-        { false } else { true }
+    pub fn set_chain(&mut self, v: Vec<X509>) {
+        self.chain = v;
     }
 
-    pub fn set_max_len(&mut self, len: &usize) -> () {
-        self.max_len = *len;
+    pub fn set_max_len(&mut self, len: usize) -> () {
+        self.max_len = len;
+    }
+    
+    pub fn len_ok(self) -> () {
+        assert!(self.chain.len() <= self.max_len)
     }
 
     pub fn pop_root(&mut self) -> X509 {
@@ -54,12 +57,13 @@ impl CertChain {
     }
 
     pub fn verify_issuers(self) -> () {
-        for cert in self.chain.iter() {
-            let parent = self.chain.iter().next();
+        let mut iter = self.chain.iter().peekable();
+        while let Some(cert) = iter.next() {
+            let parent = iter.peek();
             if parent.is_none() { continue };
-            assert_eq!(parent.unwrap().issued(&cert), X509VerifyResult::OK);
-        }
+            assert_eq!(parent.unwrap().issued(&cert), X509VerifyResult::OK);                
         println!("Issuer relationships in PCK cert chain are valid...");
+        }
     }
 
 //    pub fn verify_sigs() -> {
@@ -146,11 +150,15 @@ fn verify_chain_issuers(
     println!("Issuer relationships in PCK cert chain are valid...");
 }
 
-// TODO: pass in entire chain file instead
 fn verify_chain_sigs(
     mut pck_chain: Vec<X509>,
     pck_cert: openssl::x509::X509,
 ) {
+
+    let mut cert_chain = CertChain::default();
+    cert_chain.set_chain(pck_chain.clone());
+    cert_chain.clone().len_ok();
+    cert_chain.verify_issuers();
 
     // Parse out root cert, which will be at end of chain
     // The rest of the chain holds intermediate certs

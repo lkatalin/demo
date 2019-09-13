@@ -41,20 +41,26 @@ impl Default for CertChain {
 
 impl CertChain {
     pub fn len_ok(self) -> bool {
-        if self.chain.len() > self.max_len {
-            false
-        } else {
-            true
-        }
+        if self.chain.len() > self.max_len 
+        { false } else { true }
+    }
+
+    pub fn set_max_len(&mut self, len: &usize) -> () {
+        self.max_len = *len;
     }
 
     pub fn pop_root(&mut self) -> X509 {
         self.chain.pop().unwrap()
     }
 
-//    pub fn verify_issuers() -> {
-    
-//    }
+    pub fn verify_issuers(self) -> () {
+        for cert in self.chain.iter() {
+            let parent = self.chain.iter().next();
+            if parent.is_none() { continue };
+            assert_eq!(parent.unwrap().issued(&cert), X509VerifyResult::OK);
+        }
+        println!("Issuer relationships in PCK cert chain are valid...");
+    }
 
 //    pub fn verify_sigs() -> {
     

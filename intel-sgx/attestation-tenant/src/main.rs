@@ -1,4 +1,3 @@
-use openssl::error::ErrorStack;
 use failure::Error;
 use ascii::AsciiStr;
 use dcap_ql::quote::*;
@@ -11,11 +10,9 @@ use openssl::{
     pkey::PKey,
     sha,
     sign::Verifier,
-    ssl::{SslContextBuilder, SslMethod},
     stack::Stack,
     x509::*,
 };
-//use failure::error::Error;
 use percent_encoding::percent_decode;
 use std::{
     convert::TryFrom,
@@ -23,20 +20,6 @@ use std::{
     io::{Read, Write},
     net::TcpStream,
 };
-
-//struct FromError(failure::Error);
-
-//impl<T: Into<failure::Error>> From<T> for FromError {
-//    fn from(t: T) -> FromError { FromError(t.into()) }
-//}
-
-//impl<F: failure::Fail> From<F> for FromError {
-//    fn from(f: F) -> FromError { FromError(failure::Error::from(f)) }
-//}
-
-//impl From<failure::Error> for FromError {
-//   fn from(e: failure::Error) -> FromError { FromError(e) }
-//}
 
 #[derive(Copy, Clone)]
 pub struct Signature {
@@ -120,26 +103,9 @@ fn verify_chain_issuers(
     println!("Issuer relationships in PCK cert chain are valid...");
 }
 
-fn alt_verify_chain_sigs(
-    root_cert: openssl::x509::X509,
-    intermed_cert: openssl::x509::X509,
-    pck_cert: openssl::x509::X509, 
-    ) {
-    let mut store_bldr = store::X509StoreBuilder::new().unwrap();
-    store_bldr.add_cert(root_cert.clone()).unwrap();
-    store_bldr.add_cert(intermed_cert.clone()).unwrap();
-    store_bldr.add_cert(pck_cert.clone()).unwrap();
-    let store = store_bldr.build();
-    
-    let mut context_builder = SslContextBuilder::new(SslMethod::tls()).unwrap();
-    context_builder.set_verify_depth(10);
-    context_builder.set_verify_cert_store(store).unwrap();
-    let ssl_context = context_builder.build();
-
-}
-
 // TODO: pass in entire chain file instead
 fn verify_chain_sigs(
+    _pck_chain: Vec<X509>,
     root_cert: openssl::x509::X509,
     intermed_cert: openssl::x509::X509,
     pck_cert: openssl::x509::X509,
@@ -167,11 +133,6 @@ fn verify_chain_sigs(
     assert!(context
         .init(&store, &pck_cert, &chain, |c| c.verify_cert())
         .unwrap());
-
-    // This checks the root certificate's self-signature.
-    //assert!(context
-    //    .init(&store, &root_cert, &chain, |c| c.verify_cert())
-    //    .unwrap());
 
     println!("Signatures on certificate chain are valid...");
 }
@@ -202,13 +163,16 @@ fn verify_ak_sig(ak: &[u8], signed: &[u8], ak_sig: Vec<u8>) {
     let mut verifier = Verifier::new(MessageDigest::sha256(), &pkey).unwrap();
     verifier.update(signed).unwrap();
 
-    let r = BigNum::from_slice(&ak_sig[0..32]).unwrap();
-    let s = BigNum::from_slice(&ak_sig[32..64]).unwrap();
-    let ecdsa_ak_sig = EcdsaSig::from_private_components(r, s).unwrap();
+    let sig = Signature::try_from(ak_sig.as_slice()).unwrap();
+    let der_ak_sig = Vec::try_from(&sig).unwrap();
 
-    let der_ak_sig = &ecdsa_ak_sig.to_der().unwrap();
+    //let r = BigNum::from_slice(&ak_sig[0..32]).unwrap();
+    //let s = BigNum::from_slice(&ak_sig[32..64]).unwrap();
+    //let ecdsa_ak_sig = EcdsaSig::from_private_components(r, s).unwrap();
 
-    assert!(verifier.verify(&der_ak_sig.as_slice()).unwrap());
+    //let der_ak_sig = &ecdsa_ak_sig.to_der().unwrap();
+
+    assert!(verifier.verify(&der_ak_sig).unwrap());
     println!("AK signature on Quote header || report body is valid...");
 }
 
@@ -221,17 +185,9 @@ fn verify_pck_sig(pck_cert: &openssl::x509::X509, qe_report_body: &[u8], qe_repo
 
     // make a Signature
     let sig = Signature::try_from(qe_report_sig).unwrap();
-
     let ecdsa_sig = Vec::try_from(&sig).unwrap();
 
-    //let reportsig = raw_ecdsa_to_asn1(&qe_report_sig.to_vec());
-    //let r = BigNum::from_slice(&qe_report_sig.to_vec()[0..32]).unwrap();
-    //let s = BigNum::from_slice(&qe_report_sig.to_vec()[32..64]).unwrap();
-    //let ecdsa_reportsig = EcdsaSig::from_private_components(r, s).unwrap();
-    //let der_reportsig = &ecdsa_reportsig.to_der().unwrap();
-
     assert!(verifier.verify(&ecdsa_sig).unwrap());
-    //assert!(verifier.verify(&der_reportsig).unwrap());
     println!("PCK signature on AK is valid...");
 }
 
@@ -313,6 +269,7 @@ fn main() {
     // This verifies the PCK certificate chain issuers and signatures.
     verify_chain_issuers(&tenant_root_cert, &tenant_intermed_cert, &quote_leaf_cert);
     verify_chain_sigs(
+        pck_cert_chain.clone(),
         tenant_root_cert.clone(),
         tenant_intermed_cert.clone(),
         quote_leaf_cert.clone(),

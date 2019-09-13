@@ -21,12 +21,45 @@ use std::{
     net::TcpStream,
 };
 
-//impl somestruct {
-//    /// Returns... 
-//    pub fn somefunction() -> Result<theresult, Error> {
-//        ...
+//type CertChain = Vec<X509>;
+#[derive(Clone)]
+pub struct CertChain {
+    chain : Vec<X509>,
+    max_len : usize
+}
+
+
+impl Default for CertChain {
+     fn default() -> Self {
+            CertChain {
+                chain: Vec::new(),
+                max_len : 10,
+        }
+     }
+}
+
+
+impl CertChain {
+    pub fn len_ok(self) -> bool {
+        if self.chain.len() > self.max_len {
+            false
+        } else {
+            true
+        }
+    }
+
+    pub fn pop_root(&mut self) -> X509 {
+        self.chain.pop().unwrap()
+    }
+
+//    pub fn verify_issuers() -> {
+    
 //    }
-//}
+
+//    pub fn verify_sigs() -> {
+    
+//    }
+}
 
 #[derive(Copy, Clone)]
 pub struct Signature {

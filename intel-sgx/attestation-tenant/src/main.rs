@@ -1,3 +1,5 @@
+use openssl::error::ErrorStack;
+use failure::Error;
 use ascii::AsciiStr;
 use dcap_ql::quote::*;
 use openssl::{
@@ -9,6 +11,7 @@ use openssl::{
     pkey::PKey,
     sha,
     sign::Verifier,
+    ssl::{SslContextBuilder, SslMethod},
     stack::Stack,
     x509::*,
 };
@@ -21,6 +24,19 @@ use std::{
     net::TcpStream,
 };
 
+//struct FromError(failure::Error);
+
+//impl<T: Into<failure::Error>> From<T> for FromError {
+//    fn from(t: T) -> FromError { FromError(t.into()) }
+//}
+
+//impl<F: failure::Fail> From<F> for FromError {
+//    fn from(f: F) -> FromError { FromError(failure::Error::from(f)) }
+//}
+
+//impl From<failure::Error> for FromError {
+//   fn from(e: failure::Error) -> FromError { FromError(e) }
+//}
 
 #[derive(Copy, Clone)]
 pub struct Signature {
@@ -55,17 +71,6 @@ impl Default for Signature {
     }
 }
 
-// turns ecdsa into Signature
-//impl From<EcdsaSig> for Signature {
-//    #[inline]
-//    fn from(value: EcdsaSig) -> Self {
-//        Signature {
-//            r: value.r().into_le(),
-//            s: value.s().into_le(),
-//        }
-//    }
-//}
-
 // turns &[u8] into Signature
 impl From<&[u8]> for Signature { 
     #[inline]
@@ -80,10 +85,6 @@ impl From<&[u8]> for Signature {
             s: s,
         }
     }
-    //#[inline]
-    //fn try_from(value: &[u8]) -> Result<Self> {
-    //    Ok(EcdsaSig::from_der(value)?.into())
-    //}
 }
 
 // turns Signature into ecdsa
@@ -98,12 +99,12 @@ impl From<&Signature> for EcdsaSig {
     }
 }
 
-impl From<&Signature> for Vec<u8> {
-    //type Error = Error;
+impl TryFrom<&Signature> for Vec<u8> {
+    type Error = Error;
 
     #[inline]
-    fn from(value: &Signature) -> Self {
-        EcdsaSig::try_from(value).unwrap().to_der().unwrap()
+    fn try_from(value: &Signature) -> Result<Self> {
+        Ok(EcdsaSig::try_from(value)?.to_der()?)
     }
 }
 
@@ -119,39 +120,58 @@ fn verify_chain_issuers(
     println!("Issuer relationships in PCK cert chain are valid...");
 }
 
+fn alt_verify_chain_sigs(
+    root_cert: openssl::x509::X509,
+    intermed_cert: openssl::x509::X509,
+    pck_cert: openssl::x509::X509, 
+    ) {
+    let mut store_bldr = store::X509StoreBuilder::new().unwrap();
+    store_bldr.add_cert(root_cert.clone()).unwrap();
+    store_bldr.add_cert(intermed_cert.clone()).unwrap();
+    store_bldr.add_cert(pck_cert.clone()).unwrap();
+    let store = store_bldr.build();
+    
+    let mut context_builder = SslContextBuilder::new(SslMethod::tls()).unwrap();
+    context_builder.set_verify_depth(10);
+    context_builder.set_verify_cert_store(store).unwrap();
+    let ssl_context = context_builder.build();
+
+}
+
+// TODO: pass in entire chain file instead
 fn verify_chain_sigs(
     root_cert: openssl::x509::X509,
     intermed_cert: openssl::x509::X509,
     pck_cert: openssl::x509::X509,
 ) {
-    // This creates a new certificate chain object and context.
-    let mut chain = Stack::new().unwrap();
-    let mut context = X509StoreContext::new().unwrap();
 
-    // This adds the root certificate to the trusted store.
+    // Parse out root cert
+
+    // Only the root certificate is added to the trusted store.
     let mut store_bldr = store::X509StoreBuilder::new().unwrap();
     store_bldr.add_cert(root_cert.clone()).unwrap();
     let store = store_bldr.build();
-
-    // This checks that the intermediate cert signature is valid
-    // in the root certificate's context.
-    assert!(context
-        .init(&store, &intermed_cert, &chain, |c| c.verify_cert())
-        .unwrap());
-
-    // This adds the intermediate cert to the chain.
+    
+    // Creates the chain of untrusted certificates.
+    // TODO: make a for loop
+    let mut chain = Stack::new().unwrap();
     let _ = chain.push(intermed_cert);
+    
+    // This context will be initialized with the trusted store and
+    // the chain of untrusted certificates to verify the leaf.
+    let mut context = X509StoreContext::new().unwrap();
 
-    // This verifies the PCK cert's signature in the intermediate
-    // certificate's context.
+    // This operation verifies the leaf (PCK_cert) in the context of the
+    // chain. If the chain cannot be verified, the leaf will not be
+    // verified.
     assert!(context
         .init(&store, &pck_cert, &chain, |c| c.verify_cert())
         .unwrap());
 
     // This checks the root certificate's self-signature.
-    assert!(context
-        .init(&store, &root_cert, &chain, |c| c.verify_cert())
-        .unwrap());
+    //assert!(context
+    //    .init(&store, &root_cert, &chain, |c| c.verify_cert())
+    //    .unwrap());
 
     println!("Signatures on certificate chain are valid...");
 }
@@ -200,16 +220,18 @@ fn verify_pck_sig(pck_cert: &openssl::x509::X509, qe_report_body: &[u8], qe_repo
     verifier.update(qe_report_body).unwrap();
 
     // make a Signature
-    let sig = Signature::try_from(qe_report_sig);
-    println!("signature: {:?}", sig);
+    let sig = Signature::try_from(qe_report_sig).unwrap();
+
+    let ecdsa_sig = Vec::try_from(&sig).unwrap();
 
     //let reportsig = raw_ecdsa_to_asn1(&qe_report_sig.to_vec());
-    let r = BigNum::from_slice(&qe_report_sig.to_vec()[0..32]).unwrap();
-    let s = BigNum::from_slice(&qe_report_sig.to_vec()[32..64]).unwrap();
-    let ecdsa_reportsig = EcdsaSig::from_private_components(r, s).unwrap();
-    let der_reportsig = &ecdsa_reportsig.to_der().unwrap();
+    //let r = BigNum::from_slice(&qe_report_sig.to_vec()[0..32]).unwrap();
+    //let s = BigNum::from_slice(&qe_report_sig.to_vec()[32..64]).unwrap();
+    //let ecdsa_reportsig = EcdsaSig::from_private_components(r, s).unwrap();
+    //let der_reportsig = &ecdsa_reportsig.to_der().unwrap();
 
-    assert!(verifier.verify(&der_reportsig).unwrap());
+    assert!(verifier.verify(&ecdsa_sig).unwrap());
+    //assert!(verifier.verify(&der_reportsig).unwrap());
     println!("PCK signature on AK is valid...");
 }
 

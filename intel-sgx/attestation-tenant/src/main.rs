@@ -21,6 +21,13 @@ use std::{
     net::TcpStream,
 };
 
+//impl somestruct {
+//    /// Returns... 
+//    pub fn somefunction() -> Result<theresult, Error> {
+//        ...
+//    }
+//}
+
 #[derive(Copy, Clone)]
 pub struct Signature {
     r: [u8; 32],
@@ -55,37 +62,34 @@ impl Default for Signature {
 }
 
 // turns &[u8] into Signature
-impl From<&[u8]> for Signature { 
-    #[inline]
-    fn from(value: &[u8]) -> Self {
+impl TryFrom<&[u8]> for Signature { 
+    type Error = Error;
+    fn try_from(value: &[u8]) -> Result<Self> {
         let mut r: [u8; 32] = Default::default();
         let mut s: [u8; 32] = Default::default();
         r.copy_from_slice(&value[0..32]);
         s.copy_from_slice(&value[32..64]);
 
-        Signature {
+        Ok(Signature {
             r: r,
             s: s,
-        }
+        })
     }
 }
 
 // turns Signature into ecdsa
-impl From<&Signature> for EcdsaSig {
-    //type Error = Error;
-
-    #[inline]
-    fn from(value: &Signature) -> Self {
+impl TryFrom<&Signature> for EcdsaSig {
+    type Error = Error;
+    fn try_from(value: &Signature) -> Result<Self> {
         let r = BigNum::from_slice(&value.r).unwrap();
         let s = BigNum::from_slice(&value.s).unwrap();
-        EcdsaSig::from_private_components(r, s).unwrap()
+        Ok(EcdsaSig::from_private_components(r, s)?)
     }
 }
 
+// turns a Signature in to an ECDSA DER Vector
 impl TryFrom<&Signature> for Vec<u8> {
     type Error = Error;
-
-    #[inline]
     fn try_from(value: &Signature) -> Result<Self> {
         Ok(EcdsaSig::try_from(value)?.to_der()?)
     }
@@ -106,18 +110,12 @@ fn verify_chain_issuers(
 // TODO: pass in entire chain file instead
 fn verify_chain_sigs(
     mut pck_chain: Vec<X509>,
-    root_cert: openssl::x509::X509,
-    intermed_cert: openssl::x509::X509,
     pck_cert: openssl::x509::X509,
 ) {
 
     // Parse out root cert, which will be at end of chain
     // The rest of the chain holds intermediate certs
     let root_cert = pck_chain.pop().unwrap();
-    println!("remaining chain len is {}", pck_chain.len());
-
-    // the pck chain is a Vec<X509>
-    // we need a &StackRef<X509> in the same order as the vector
 
     // Only the root certificate is added to the trusted store.
     let mut store_bldr = store::X509StoreBuilder::new().unwrap();
@@ -125,7 +123,6 @@ fn verify_chain_sigs(
     let store = store_bldr.build();
     
     // Creates the chain of untrusted certificates.
-    // TODO: make a for loop
     let mut chain = Stack::new().unwrap();
     for c in pck_chain.iter() {
         let _ = chain.push(c.clone());
@@ -258,7 +255,7 @@ fn main() {
     }
     let cert_chain_file = env::args().nth(1).unwrap();
     let cert_chain_contents = fs::read_to_string(&cert_chain_file[..]).unwrap();
-    let mut pck_cert_chain = X509::stack_from_pem(cert_chain_contents.as_bytes()).unwrap();
+    let pck_cert_chain = X509::stack_from_pem(cert_chain_contents.as_bytes()).unwrap();
     if pck_cert_chain.len() != 2 {
         panic!("Certificate chain must include exactly two certificates.");
     }
@@ -272,8 +269,6 @@ fn main() {
     verify_chain_issuers(&tenant_root_cert, &tenant_intermed_cert, &quote_leaf_cert);
     verify_chain_sigs(
         pck_cert_chain.clone(),
-        tenant_root_cert.clone(),
-        tenant_intermed_cert.clone(),
         quote_leaf_cert.clone(),
     );
     println!("PCK cert chain verified...");

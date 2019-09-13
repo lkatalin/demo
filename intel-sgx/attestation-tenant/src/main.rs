@@ -105,13 +105,19 @@ fn verify_chain_issuers(
 
 // TODO: pass in entire chain file instead
 fn verify_chain_sigs(
-    _pck_chain: Vec<X509>,
+    mut pck_chain: Vec<X509>,
     root_cert: openssl::x509::X509,
     intermed_cert: openssl::x509::X509,
     pck_cert: openssl::x509::X509,
 ) {
 
-    // Parse out root cert
+    // Parse out root cert, which will be at end of chain
+    // The rest of the chain holds intermediate certs
+    let root_cert = pck_chain.pop().unwrap();
+    println!("remaining chain len is {}", pck_chain.len());
+
+    // the pck chain is a Vec<X509>
+    // we need a &StackRef<X509> in the same order as the vector
 
     // Only the root certificate is added to the trusted store.
     let mut store_bldr = store::X509StoreBuilder::new().unwrap();
@@ -121,8 +127,10 @@ fn verify_chain_sigs(
     // Creates the chain of untrusted certificates.
     // TODO: make a for loop
     let mut chain = Stack::new().unwrap();
-    let _ = chain.push(intermed_cert);
-    
+    for c in pck_chain.iter() {
+        let _ = chain.push(c.clone());
+    }
+
     // This context will be initialized with the trusted store and
     // the chain of untrusted certificates to verify the leaf.
     let mut context = X509StoreContext::new().unwrap();
@@ -165,12 +173,6 @@ fn verify_ak_sig(ak: &[u8], signed: &[u8], ak_sig: Vec<u8>) {
 
     let sig = Signature::try_from(ak_sig.as_slice()).unwrap();
     let der_ak_sig = Vec::try_from(&sig).unwrap();
-
-    //let r = BigNum::from_slice(&ak_sig[0..32]).unwrap();
-    //let s = BigNum::from_slice(&ak_sig[32..64]).unwrap();
-    //let ecdsa_ak_sig = EcdsaSig::from_private_components(r, s).unwrap();
-
-    //let der_ak_sig = &ecdsa_ak_sig.to_der().unwrap();
 
     assert!(verifier.verify(&der_ak_sig).unwrap());
     println!("AK signature on Quote header || report body is valid...");
@@ -256,7 +258,7 @@ fn main() {
     }
     let cert_chain_file = env::args().nth(1).unwrap();
     let cert_chain_contents = fs::read_to_string(&cert_chain_file[..]).unwrap();
-    let pck_cert_chain = X509::stack_from_pem(cert_chain_contents.as_bytes()).unwrap();
+    let mut pck_cert_chain = X509::stack_from_pem(cert_chain_contents.as_bytes()).unwrap();
     if pck_cert_chain.len() != 2 {
         panic!("Certificate chain must include exactly two certificates.");
     }

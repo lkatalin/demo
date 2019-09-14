@@ -66,10 +66,46 @@ impl CertChain {
         }
     }
 
-//    pub fn verify_sigs() -> {
-    
-//    }
+    pub fn verify_sigs(mut self, pck_cert: &X509) -> () {
+        // Parse out root cert, which will be at end of chain
+        // The rest of the chain holds intermediate certs
+        let root_cert = self.pop_root();
+
+        // Only the root certificate is added to the trusted store.
+        let mut store_bldr = store::X509StoreBuilder::new().unwrap();
+        store_bldr.add_cert(root_cert.clone()).unwrap();
+        let store = store_bldr.build();
+        
+        // Creates the chain of untrusted certificates.
+        let mut chain = Stack::new().unwrap();
+        for c in self.chain.iter() {
+            let _ = chain.push(c.clone());
+        }
+
+        // This context will be initialized with the trusted store and
+        // the chain of untrusted certificates to verify the leaf.
+        let mut context = X509StoreContext::new().unwrap();
+
+        // This operation verifies the leaf (PCK_cert) in the context of the
+        // chain. If the chain cannot be verified, the leaf will not be
+        // verified.
+        assert!(context
+            .init(&store, &pck_cert, &chain, |c| c.verify_cert())
+            .unwrap());
+
+        println!("Signatures on certificate chain are valid...");
+    }
 }
+
+//fn verify_chain_sigs(
+//    mut pck_chain: Vec<X509>,
+//    pck_cert: openssl::x509::X509,
+//) {
+
+//    let root_cert = pck_chain.pop().unwrap();
+
+    
+//}
 
 #[derive(Copy, Clone)]
 pub struct Signature {
@@ -138,56 +174,6 @@ impl TryFrom<&Signature> for Vec<u8> {
     }
 }
 
-fn verify_chain_issuers(
-    root_cert: &openssl::x509::X509,
-    intermed_cert: &openssl::x509::X509,
-    pck_cert: &openssl::x509::X509,
-) {
-    assert_eq!(intermed_cert.issued(&pck_cert), X509VerifyResult::OK);
-
-    assert_eq!(root_cert.issued(&intermed_cert), X509VerifyResult::OK);
-
-    println!("Issuer relationships in PCK cert chain are valid...");
-}
-
-fn verify_chain_sigs(
-    mut pck_chain: Vec<X509>,
-    pck_cert: openssl::x509::X509,
-) {
-
-    let mut cert_chain = CertChain::default();
-    cert_chain.set_chain(pck_chain.clone());
-    cert_chain.clone().len_ok();
-    cert_chain.verify_issuers();
-
-    // Parse out root cert, which will be at end of chain
-    // The rest of the chain holds intermediate certs
-    let root_cert = pck_chain.pop().unwrap();
-
-    // Only the root certificate is added to the trusted store.
-    let mut store_bldr = store::X509StoreBuilder::new().unwrap();
-    store_bldr.add_cert(root_cert.clone()).unwrap();
-    let store = store_bldr.build();
-    
-    // Creates the chain of untrusted certificates.
-    let mut chain = Stack::new().unwrap();
-    for c in pck_chain.iter() {
-        let _ = chain.push(c.clone());
-    }
-
-    // This context will be initialized with the trusted store and
-    // the chain of untrusted certificates to verify the leaf.
-    let mut context = X509StoreContext::new().unwrap();
-
-    // This operation verifies the leaf (PCK_cert) in the context of the
-    // chain. If the chain cannot be verified, the leaf will not be
-    // verified.
-    assert!(context
-        .init(&store, &pck_cert, &chain, |c| c.verify_cert())
-        .unwrap());
-
-    println!("Signatures on certificate chain are valid...");
-}
 
 fn key_from_affine_coordinates(
     x: Vec<u8>,
@@ -303,21 +289,28 @@ fn main() {
     let cert_chain_file = env::args().nth(1).unwrap();
     let cert_chain_contents = fs::read_to_string(&cert_chain_file[..]).unwrap();
     let pck_cert_chain = X509::stack_from_pem(cert_chain_contents.as_bytes()).unwrap();
-    if pck_cert_chain.len() != 2 {
-        panic!("Certificate chain must include exactly two certificates.");
-    }
+    //if pck_cert_chain.len() != 2 {
+    //    panic!("Certificate chain must include exactly two certificates.");
+    //}
 
     // This gets the individual certificates from the tenant's PCK chain.
-    let tenant_intermed_cert = &pck_cert_chain[0];
-    let tenant_root_cert = &pck_cert_chain[1];
+    //let tenant_intermed_cert = &pck_cert_chain[0];
+    //let tenant_root_cert = &pck_cert_chain[1];
     println!("Tenant's PCK cert chain loaded...");
 
     // This verifies the PCK certificate chain issuers and signatures.
-    verify_chain_issuers(&tenant_root_cert, &tenant_intermed_cert, &quote_leaf_cert);
-    verify_chain_sigs(
-        pck_cert_chain.clone(),
-        quote_leaf_cert.clone(),
-    );
+    
+    let mut cert_chain = CertChain::default();
+    cert_chain.set_chain(pck_cert_chain.clone());
+    cert_chain.clone().len_ok();
+    cert_chain.clone().verify_issuers();
+    cert_chain.verify_sigs(&quote_leaf_cert);
+
+    //verify_chain_issuers(&tenant_root_cert, &tenant_intermed_cert, &quote_leaf_cert);
+    //verify_chain_sigs(
+    //    pck_cert_chain.clone(),
+    //    quote_leaf_cert.clone(),
+    //);
     println!("PCK cert chain verified...");
 
     // This verifies the Attestation Key's signature on the Quote.

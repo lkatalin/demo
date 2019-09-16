@@ -27,10 +27,9 @@ fn main() {
     daemon_buf.read_exact(&mut quote).unwrap();
 
     // The Quoting Enclave's Attestation Key signed the Quote Header (Quote bytes 0-48)
-    // concatenated with the ISV Enclave Report (Quote bytes 49-432). Together these
-    // make up bytes 0-432 of the Quote.
-    //let ak_signed_material = &quote[0..432].to_vec();
+    // concatenated with the ISV Enclave Report (Quote bytes 49-432).
     let ak_signed_material = dcap_ql::quote::Quote::raw_header_and_body(&quote).unwrap();
+    let hashed_reportdata = dcap_ql::quote::Quote::raw_pck_hash(&quote).unwrap();
 
     // This makes the Quote parseable and returns the Quote's signature section.
     let quote = dcap_ql::quote::Quote::parse(&quote).unwrap();
@@ -85,7 +84,7 @@ fn main() {
 
     // This verifies that the hashed material signed by the PCK is correct.
     //verify_pck_hash(&q_qe_report, &q_att_key_pub, &q_auth_data);
-    let hashed_reportdata = &q_qe_report[320..352];
+    //let hashed_reportdata = &q_qe_report[320..352];
     let mut unhashed_data = Vec::new();
     unhashed_data.extend(q_att_key_pub.to_vec());
     unhashed_data.extend(q_auth_data.to_vec());

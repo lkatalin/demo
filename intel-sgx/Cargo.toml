@@ -1,2 +1,5 @@
 [workspace]
 members = ['attestation-enclave', 'attestation-daemon', 'attestation-tenant']
+
+[patch.crates-io]
+dcap-ql = { path = "../../rust-sgx/dcap-ql" }

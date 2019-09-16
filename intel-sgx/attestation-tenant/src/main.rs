@@ -32,18 +32,20 @@ fn main() {
     let ak_signed_material = &quote[0..432].to_vec();
 
     // This parses the certificate data and certificate chain from the Quote.
-    let cert_data = &quote[1052..].to_vec();
-    let cert_data_utf8_decoded = percent_decode(cert_data)
-        .decode_utf8()
-        .unwrap()
-        .into_owned();
-    let quote_pck_cert_chain =
-        X509::stack_from_pem(&cert_data_utf8_decoded.as_bytes()[..]).unwrap();
-    let quote_leaf_cert = &quote_pck_cert_chain[0];
+    //let cert_data = &quote[1052..].to_vec();
+    //let cert_data_utf8_decoded = percent_decode(cert_data)
+    //    .decode_utf8()
+    //    .unwrap()
+    //    .into_owned();
+    //let quote_pck_cert_chain =
+    //    X509::stack_from_pem(&cert_data_utf8_decoded.as_bytes()[..]).unwrap();
+    //let quote_leaf_cert = &quote_pck_cert_chain[0];
 
     // This makes the Quote parseable and returns the Quote's signature section.
     let quote = dcap_ql::quote::Quote::parse(&quote).unwrap();
     let q_sig = quote.signature::<Quote3SignatureEcdsaP256>().unwrap();
+    let cert_data = q_sig.certification_data::<Qe3CertDataPckCertChain>().unwrap();
+    let quote_leaf_cert = cert_data.leaf_cert;
 
     // This parses the Quote's signature section.
     let q_enclave_report_sig = q_sig.signature();
@@ -59,15 +61,15 @@ fn main() {
     let cert_chain_file_contents =
         fs::read_to_string(&cert_chain_file[..]).expect("PCK cert chain file path invalid.");
 
-    // This verifies the PCK certificate chain issuers and signatures.
-    // Reconstructs PCK chain with Quote's leaf cert added to end of tenant's chain.
+    // This reconstructs the PCK chain with the Quote's leaf cert added to end of tenant's chain.
     let cert_chain = cert_chain::CertChain::new_from_chain(
         X509::stack_from_pem(cert_chain_file_contents.as_bytes()).unwrap(),
-        quote_leaf_cert,
+        &quote_leaf_cert,
     );
     cert_chain.len_ok();
     println!("Tenant's PCK cert chain loaded...");
 
+    // This verifies the PCK certificate chain issuers and signatures.
     cert_chain.verify_issuers();
     cert_chain.verify_sigs();
     println!("PCK cert chain verified...");

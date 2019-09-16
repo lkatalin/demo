@@ -7,7 +7,7 @@ use openssl::{
     ecdsa::EcdsaSig,
     hash::MessageDigest,
     nid::Nid,
-    pkey::PKey,
+    pkey::{PKey, Public},
     sha,
     sign::Verifier,
     stack::Stack,
@@ -22,13 +22,12 @@ use std::{
     net::TcpStream,
 };
 
-//type CertChain = Vec<X509>;
+
 #[derive(Clone)]
 pub struct CertChain {
     chain : Vec<X509>,
     max_len : usize
 }
-
 
 impl Default for CertChain {
      fn default() -> Self {
@@ -97,16 +96,6 @@ impl CertChain {
     }
 }
 
-//fn verify_chain_sigs(
-//    mut pck_chain: Vec<X509>,
-//    pck_cert: openssl::x509::X509,
-//) {
-
-//    let root_cert = pck_chain.pop().unwrap();
-
-    
-//}
-
 #[derive(Copy, Clone)]
 pub struct Signature {
     r: [u8; 32],
@@ -174,39 +163,82 @@ impl TryFrom<&Signature> for Vec<u8> {
     }
 }
 
-
-fn key_from_affine_coordinates(
-    x: Vec<u8>,
-    y: Vec<u8>,
-) -> openssl::ec::EcKey<openssl::pkey::Public> {
-    let group = EcGroup::from_curve_name(Nid::X9_62_PRIME256V1).unwrap();
-    let xbn = openssl::bn::BigNum::from_slice(&x).unwrap();
-    let ybn = openssl::bn::BigNum::from_slice(&y).unwrap();
-
-    let ec_key = EcKey::from_public_key_affine_coordinates(&group, &xbn, &ybn).unwrap();
-
-    assert!(ec_key.check_key().is_ok());
-
-    ec_key
+pub struct Key {
+    x_coord: [u8; 32],
+    y_coord: [u8; 32],
+    pkey: PKey<Public>,
 }
+
+impl Key {
+
+    pub fn new_from_xy(xy_coords: &[u8]) -> Self {
+        let group = EcGroup::from_curve_name(Nid::X9_62_PRIME256V1).unwrap();
+        let mut x : [u8; 32] = Default::default();
+        let mut y : [u8; 32] = Default::default();
+        x.copy_from_slice(&xy_coords[0..32]);
+        y.copy_from_slice(&xy_coords[32..64]);
+        let xbn = BigNum::from_slice(&x).unwrap();
+        let ybn = BigNum::from_slice(&y).unwrap();
+        let ec_key = EcKey::from_public_key_affine_coordinates(&group, &xbn, &ybn).unwrap();
+        assert!(ec_key.check_key().is_ok());
+        let pkey = PKey::from_ec_key(ec_key).unwrap();
+
+        Key {
+            x_coord: x,
+            y_coord: y,
+            pkey: pkey,
+        }
+    }
+
+    pub fn new_from_pubkey(pkey: PKey<Public>) -> Self {
+        Key {
+            x_coord: Default::default(),
+            y_coord: Default::default(),
+            pkey: pkey,
+        }
+    }
+
+    pub fn verify_sig(self, signed: &[u8], sig: &Vec<u8>) -> () {
+        let mut verifier = Verifier::new(MessageDigest::sha256(), &self.pkey).unwrap();
+        verifier.update(signed).unwrap();
+        assert!(verifier.verify(sig).unwrap());
+        println!("AK signature on Quote header || report body is valid...");
+    }
+
+}
+
+//fn key_from_affine_coordinates(
+//    x: Vec<u8>,
+//    y: Vec<u8>,
+//) -> openssl::ec::EcKey<openssl::pkey::Public> {
+//    let group = EcGroup::from_curve_name(Nid::X9_62_PRIME256V1).unwrap();
+//    let xbn = openssl::bn::BigNum::from_slice(&x).unwrap();
+//    let ybn = openssl::bn::BigNum::from_slice(&y).unwrap();
+
+//    let ec_key = EcKey::from_public_key_affine_coordinates(&group, &xbn, &ybn).unwrap();
+
+//    assert!(ec_key.check_key().is_ok());
+
+//    ec_key
+//}
 
 // This verifies the Attestation Key's signature on the quote header || report body.
-fn verify_ak_sig(ak: &[u8], signed: &[u8], ak_sig: Vec<u8>) {
-    let xcoord = ak[0..32].to_owned();
-    let ycoord = ak[32..64].to_owned();
+//fn verify_ak_sig(ak: &[u8], signed: &[u8], ak_sig: Vec<u8>) {
+//    let xcoord = ak[0..32].to_owned();
+//    let ycoord = ak[32..64].to_owned();
 
-    let ec_key = key_from_affine_coordinates(xcoord, ycoord);
-    let pkey = PKey::from_ec_key(ec_key).unwrap();
+//    let ec_key = key_from_affine_coordinates(xcoord, ycoord);
+//    let pkey = PKey::from_ec_key(ec_key).unwrap();
 
-    let mut verifier = Verifier::new(MessageDigest::sha256(), &pkey).unwrap();
-    verifier.update(signed).unwrap();
+//    let mut verifier = Verifier::new(MessageDigest::sha256(), &pkey).unwrap();
+//    verifier.update(signed).unwrap();
 
-    let sig = Signature::try_from(ak_sig.as_slice()).unwrap();
-    let der_ak_sig = Vec::try_from(&sig).unwrap();
+//    let sig = Signature::try_from(ak_sig.as_slice()).unwrap();
+//    let der_ak_sig = Vec::try_from(&sig).unwrap();
 
-    assert!(verifier.verify(&der_ak_sig).unwrap());
-    println!("AK signature on Quote header || report body is valid...");
-}
+//    assert!(verifier.verify(&der_ak_sig).unwrap());
+//    println!("AK signature on Quote header || report body is valid...");
+//}
 
 // This verifies The PCK's signature on the Attestation Key (embedded in Quote).
 fn verify_pck_sig(pck_cert: &openssl::x509::X509, qe_report_body: &[u8], qe_report_sig: &[u8]) {
@@ -253,7 +285,7 @@ fn main() {
 
     // The ISV enclave report signature's signed material is the first 432 bytes 
     // of the Quote. This is what the Quoting Enclave's Attestation Key signed.
-    let ak_signed = &quote[0..432].to_vec();
+    let ak_signed_material = &quote[0..432].to_vec();
 
     // This parses the certificate data and certificate chain from the Quote.
     let cert_data = &quote[1052..].to_vec();
@@ -289,35 +321,31 @@ fn main() {
     let cert_chain_file = env::args().nth(1).unwrap();
     let cert_chain_contents = fs::read_to_string(&cert_chain_file[..]).unwrap();
     let pck_cert_chain = X509::stack_from_pem(cert_chain_contents.as_bytes()).unwrap();
-    //if pck_cert_chain.len() != 2 {
-    //    panic!("Certificate chain must include exactly two certificates.");
-    //}
-
-    // This gets the individual certificates from the tenant's PCK chain.
-    //let tenant_intermed_cert = &pck_cert_chain[0];
-    //let tenant_root_cert = &pck_cert_chain[1];
     println!("Tenant's PCK cert chain loaded...");
 
-    // This verifies the PCK certificate chain issuers and signatures.
-    
+    // This verifies the PCK certificate chain issuers and signatures. 
     let mut cert_chain = CertChain::default();
     cert_chain.set_chain(pck_cert_chain.clone());
     cert_chain.clone().len_ok();
     cert_chain.clone().verify_issuers();
     cert_chain.verify_sigs(&quote_leaf_cert);
-
-    //verify_chain_issuers(&tenant_root_cert, &tenant_intermed_cert, &quote_leaf_cert);
-    //verify_chain_sigs(
-    //    pck_cert_chain.clone(),
-    //    quote_leaf_cert.clone(),
-    //);
     println!("PCK cert chain verified...");
 
+    let attestation_key = Key::new_from_xy(&q_att_key_pub);
+    let quote_signature = Signature::try_from(q_enclave_report_sig).unwrap();
+    let quote_signature = Vec::try_from(&quote_signature).unwrap();
+    attestation_key.verify_sig(&ak_signed_material, &quote_signature);
+
     // This verifies the Attestation Key's signature on the Quote.
-    verify_ak_sig(&q_att_key_pub, &ak_signed, q_enclave_report_sig.to_vec());
+    //verify_ak_sig(&q_att_key_pub, &ak_signed_material, q_enclave_report_sig.to_vec());
 
     // This verifies the PCK's signature on the Attestation Public Key.
-    verify_pck_sig(&quote_leaf_cert, &q_qe_report, &q_qe_report_sig);
+    let pc_key = Key::new_from_pubkey(quote_leaf_cert.public_key().unwrap());
+    let qe_report_signature = Signature::try_from(q_qe_report_sig).unwrap();
+    let qe_report_signature = Vec::try_from(&qe_report_signature).unwrap();
+    pc_key.verify_sig(&q_qe_report, &qe_report_signature);
+
+    //verify_pck_sig(&quote_leaf_cert, &q_qe_report, &q_qe_report_sig);
 
     // This verifies that the hashed material signed by the PCK is correct.
     verify_pck_hash(&q_qe_report, &q_att_key_pub, &q_auth_data);

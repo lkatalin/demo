@@ -29,17 +29,8 @@ fn main() {
     // The Quoting Enclave's Attestation Key signed the Quote Header (Quote bytes 0-48)
     // concatenated with the ISV Enclave Report (Quote bytes 49-432). Together these
     // make up bytes 0-432 of the Quote.
-    let ak_signed_material = &quote[0..432].to_vec();
-
-    // This parses the certificate data and certificate chain from the Quote.
-    //let cert_data = &quote[1052..].to_vec();
-    //let cert_data_utf8_decoded = percent_decode(cert_data)
-    //    .decode_utf8()
-    //    .unwrap()
-    //    .into_owned();
-    //let quote_pck_cert_chain =
-    //    X509::stack_from_pem(&cert_data_utf8_decoded.as_bytes()[..]).unwrap();
-    //let quote_leaf_cert = &quote_pck_cert_chain[0];
+    //let ak_signed_material = &quote[0..432].to_vec();
+    let ak_signed_material = dcap_ql::quote::Quote::raw_header_and_body(&quote).unwrap();
 
     // This makes the Quote parseable and returns the Quote's signature section.
     let quote = dcap_ql::quote::Quote::parse(&quote).unwrap();

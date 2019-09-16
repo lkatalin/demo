@@ -15,6 +15,7 @@ use openssl::{
 };
 use percent_encoding::percent_decode;
 use std::{
+    borrow::Borrow,
     iter::Iterator,
     convert::TryFrom,
     env, fs,
@@ -163,6 +164,7 @@ impl TryFrom<&Signature> for Vec<u8> {
     }
 }
 
+//#[derive(Borrow)]
 pub struct Key {
     x_coord: [u8; 32],
     y_coord: [u8; 32],
@@ -198,62 +200,20 @@ impl Key {
         }
     }
 
-    pub fn verify_sig(self, signed: &[u8], sig: &Vec<u8>) -> () {
+    pub fn verify_sig(&self, signed: &[u8], sig: &Vec<u8>) -> () {
         let mut verifier = Verifier::new(MessageDigest::sha256(), &self.pkey).unwrap();
         verifier.update(signed).unwrap();
         assert!(verifier.verify(sig).unwrap());
-        println!("AK signature on Quote header || report body is valid...");
     }
 
+    pub fn verify_hash(&self, hashed_data: &[u8], unhashed_data: Vec<u8>) -> () {
+        let mut hasher = sha::Sha256::new();
+        hasher.update(&unhashed_data);
+        let hash = hasher.finish();
+        assert!(hash == hashed_data);
+    }
 }
 
-//fn key_from_affine_coordinates(
-//    x: Vec<u8>,
-//    y: Vec<u8>,
-//) -> openssl::ec::EcKey<openssl::pkey::Public> {
-//    let group = EcGroup::from_curve_name(Nid::X9_62_PRIME256V1).unwrap();
-//    let xbn = openssl::bn::BigNum::from_slice(&x).unwrap();
-//    let ybn = openssl::bn::BigNum::from_slice(&y).unwrap();
-
-//    let ec_key = EcKey::from_public_key_affine_coordinates(&group, &xbn, &ybn).unwrap();
-
-//    assert!(ec_key.check_key().is_ok());
-
-//    ec_key
-//}
-
-// This verifies the Attestation Key's signature on the quote header || report body.
-//fn verify_ak_sig(ak: &[u8], signed: &[u8], ak_sig: Vec<u8>) {
-//    let xcoord = ak[0..32].to_owned();
-//    let ycoord = ak[32..64].to_owned();
-
-//    let ec_key = key_from_affine_coordinates(xcoord, ycoord);
-//    let pkey = PKey::from_ec_key(ec_key).unwrap();
-
-//    let mut verifier = Verifier::new(MessageDigest::sha256(), &pkey).unwrap();
-//    verifier.update(signed).unwrap();
-
-//    let sig = Signature::try_from(ak_sig.as_slice()).unwrap();
-//    let der_ak_sig = Vec::try_from(&sig).unwrap();
-
-//    assert!(verifier.verify(&der_ak_sig).unwrap());
-//    println!("AK signature on Quote header || report body is valid...");
-//}
-
-// This verifies The PCK's signature on the Attestation Key (embedded in Quote).
-fn verify_pck_sig(pck_cert: &openssl::x509::X509, qe_report_body: &[u8], qe_report_sig: &[u8]) {
-    let pkey = pck_cert.public_key().unwrap();
-
-    let mut verifier = Verifier::new(MessageDigest::sha256(), &pkey).unwrap();
-    verifier.update(qe_report_body).unwrap();
-
-    // make a Signature
-    let sig = Signature::try_from(qe_report_sig).unwrap();
-    let ecdsa_sig = Vec::try_from(&sig).unwrap();
-
-    assert!(verifier.verify(&ecdsa_sig).unwrap());
-    println!("PCK signature on AK is valid...");
-}
 
 // This verifies the SHA-256 hash of the Attestation Public Key || QEAuthData
 // (embedded in Quote, signed by PCK).
@@ -331,24 +291,28 @@ fn main() {
     cert_chain.verify_sigs(&quote_leaf_cert);
     println!("PCK cert chain verified...");
 
+    // This verifies the Attestation Key's signature on the Quote.
     let attestation_key = Key::new_from_xy(&q_att_key_pub);
     let quote_signature = Signature::try_from(q_enclave_report_sig).unwrap();
     let quote_signature = Vec::try_from(&quote_signature).unwrap();
     attestation_key.verify_sig(&ak_signed_material, &quote_signature);
-
-    // This verifies the Attestation Key's signature on the Quote.
-    //verify_ak_sig(&q_att_key_pub, &ak_signed_material, q_enclave_report_sig.to_vec());
+    println!("AK signature on Quote header || report body is valid...");
 
     // This verifies the PCK's signature on the Attestation Public Key.
     let pc_key = Key::new_from_pubkey(quote_leaf_cert.public_key().unwrap());
     let qe_report_signature = Signature::try_from(q_qe_report_sig).unwrap();
     let qe_report_signature = Vec::try_from(&qe_report_signature).unwrap();
-    pc_key.verify_sig(&q_qe_report, &qe_report_signature);
-
-    //verify_pck_sig(&quote_leaf_cert, &q_qe_report, &q_qe_report_sig);
+    pc_key.borrow().verify_sig(&q_qe_report, &qe_report_signature);
+    println!("PCK signature on AK is valid...");
 
     // This verifies that the hashed material signed by the PCK is correct.
-    verify_pck_hash(&q_qe_report, &q_att_key_pub, &q_auth_data);
+    //verify_pck_hash(&q_qe_report, &q_att_key_pub, &q_auth_data);
+    let hashed_reportdata = &q_qe_report[320..352];
+    let mut unhashed_data = Vec::new();
+    unhashed_data.extend(q_att_key_pub.to_vec());
+    unhashed_data.extend(q_auth_data.to_vec());
+    pc_key.borrow().verify_hash(hashed_reportdata, unhashed_data);
+    println!("QE Report's hash is valid....");
 
     println!("\nQuote verified.");
 }

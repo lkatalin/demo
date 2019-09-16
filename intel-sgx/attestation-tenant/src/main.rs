@@ -55,12 +55,14 @@ fn main() {
         .expect("You must supply the path of a valid PCK certificate chain as the first argument.");
     let cert_chain_file_contents = fs::read_to_string(&cert_chain_file[..])
         .expect("PCK cert chain file path invalid.");
-    let pck_cert_chain = X509::stack_from_pem(cert_chain_file_contents.as_bytes()).unwrap();
+    //let pck_cert_chain = X509::stack_from_pem(cert_chain_file_contents.as_bytes()).unwrap();
     println!("Tenant's PCK cert chain loaded...");
 
     // This verifies the PCK certificate chain issuers and signatures.
     //let mut cert_chain = cert_chain::CertChain::default();
-    let cert_chain = cert_chain::CertChain::new_from_chain(pck_cert_chain.clone());
+    let cert_chain = cert_chain::CertChain::new_from_chain(
+        X509::stack_from_pem(cert_chain_file_contents.as_bytes()).unwrap()
+        );
     cert_chain.clone().len_ok();
     cert_chain.clone().verify_issuers();
     cert_chain.verify_sigs(&quote_leaf_cert);

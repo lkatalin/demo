@@ -2,7 +2,6 @@ mod cert_chain;
 mod sig;
 mod key;
 
-use ascii::AsciiStr;
 use bufstream::BufStream;
 use dcap_ql::quote::*;
 use openssl::x509::*;
@@ -27,16 +26,14 @@ fn main() {
     let mut quote: [u8; 4702] = [0; 4702];
     daemon_buf.read_exact(&mut quote).unwrap();
 
-    // The ISV enclave report signature's signed material is the first 432 bytes
-    // of the Quote. This is what the Quoting Enclave's Attestation Key signed.
+    // The Quoting Enclave's Attestation Key signed the Quote Header (Quote bytes 0-48) 
+    // concatenated with the ISV Enclave Report (Quote bytes 49-432). Together these
+    // make up bytes 0-432 of the Quote.
     let ak_signed_material = &quote[0..432].to_vec();
 
     // This parses the certificate data and certificate chain from the Quote.
     let cert_data = &quote[1052..].to_vec();
-    let cert_data_ascii = AsciiStr::from_ascii(cert_data).unwrap();
-    let mut cert_data_ascii_decoded = percent_decode(cert_data_ascii.as_bytes())
-        .decode_utf8()
-        .unwrap();
+    let mut cert_data_ascii_decoded = percent_decode(cert_data).decode_utf8().unwrap();
     let quote_pck_cert_chain =
         X509::stack_from_pem(&cert_data_ascii_decoded.to_mut()[..].as_bytes()).unwrap();
 

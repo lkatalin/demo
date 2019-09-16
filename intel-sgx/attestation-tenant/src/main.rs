@@ -3,6 +3,7 @@ mod sig;
 mod key;
 
 use ascii::AsciiStr;
+use bufstream::BufStream;
 use dcap_ql::quote::*;
 use openssl::x509::*;
 use percent_encoding::percent_decode;
@@ -17,15 +18,14 @@ use std::{
 
 fn main() {
     // The tenant requests attestation from the platform's attestation daemon.
-    let mut stream_daemon = TcpStream::connect("localhost:1034").unwrap();
-    let req = b"Request attestation";
-    stream_daemon.write(req).unwrap();
-
+    let daemon_conn = TcpStream::connect("localhost:1034").unwrap();
+    let mut daemon_buf = BufStream::new(daemon_conn);
+    daemon_buf.write(&b"Request attestation"[..]).unwrap();
+        
     // The tenant receives a Quote of known length from the platform's attestation
     // daemon. This Quote verifies the enclave's measurement from its Report.
     let mut quote: [u8; 4702] = [0; 4702];
-    let mut stream_quote = stream_daemon.try_clone().unwrap();
-    stream_quote.read_exact(&mut quote).unwrap();
+    daemon_buf.read_exact(&mut quote).unwrap();
 
     // The ISV enclave report signature's signed material is the first 432 bytes
     // of the Quote. This is what the Quoting Enclave's Attestation Key signed.

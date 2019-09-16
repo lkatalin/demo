@@ -57,14 +57,16 @@ fn main() {
         .expect("PCK cert chain file path invalid.");
 
     // This verifies the PCK certificate chain issuers and signatures.
+    // Reconstructs PCK chain with Quote's leaf cert added to end of tenant's chain.
     let cert_chain = cert_chain::CertChain::new_from_chain(
-        X509::stack_from_pem(cert_chain_file_contents.as_bytes()).unwrap()
+        X509::stack_from_pem(cert_chain_file_contents.as_bytes()).unwrap(),
+        quote_leaf_cert
         );
     cert_chain.len_ok();
     println!("Tenant's PCK cert chain loaded...");
     
     cert_chain.verify_issuers();
-    cert_chain.verify_sigs(&quote_leaf_cert);
+    cert_chain.verify_sigs();
     println!("PCK cert chain verified...");
 
     // This verifies the Attestation Key's signature on the Quote.

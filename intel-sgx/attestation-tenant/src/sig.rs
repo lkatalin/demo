@@ -68,12 +68,13 @@ impl TryFrom<&Signature> for Vec<u8> {
 }
 
 impl Signature {
-    pub fn to_vec(self) -> Vec<u8> {
+    pub fn to_der_vec(self) -> Vec<u8> {
         EcdsaSig::from_private_components(
-                BigNum::from_slice(&self.r).unwrap(), 
-                BigNum::from_slice(&self.s).unwrap()
-            ).unwrap()
-            .to_der()
-            .unwrap()
+            BigNum::from_slice(&self.r).unwrap(),
+            BigNum::from_slice(&self.s).unwrap(),
+        )
+        .unwrap()
+        .to_der()
+        .unwrap()
     }
 }

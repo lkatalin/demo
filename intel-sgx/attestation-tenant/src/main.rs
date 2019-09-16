@@ -1,6 +1,6 @@
 mod cert_chain;
-mod sig;
 mod key;
+mod sig;
 
 use bufstream::BufStream;
 use dcap_ql::quote::*;
@@ -20,24 +20,22 @@ fn main() {
     let daemon_conn = TcpStream::connect("localhost:1034").unwrap();
     let mut daemon_buf = BufStream::new(daemon_conn);
     daemon_buf.write(&b"Request attestation"[..]).unwrap();
-        
+
     // The tenant receives a Quote of known length from the platform's attestation
     // daemon. This Quote verifies the enclave's measurement from its Report.
     let mut quote: [u8; 4702] = [0; 4702];
     daemon_buf.read_exact(&mut quote).unwrap();
 
-    // The Quoting Enclave's Attestation Key signed the Quote Header (Quote bytes 0-48) 
+    // The Quoting Enclave's Attestation Key signed the Quote Header (Quote bytes 0-48)
     // concatenated with the ISV Enclave Report (Quote bytes 49-432). Together these
     // make up bytes 0-432 of the Quote.
     let ak_signed_material = &quote[0..432].to_vec();
 
     // This parses the certificate data and certificate chain from the Quote.
     let cert_data = &quote[1052..].to_vec();
-    let mut cert_data_ascii_decoded = percent_decode(cert_data).decode_utf8().unwrap();
+    let mut cert_data_utf8_decoded = percent_decode(cert_data).decode_utf8().unwrap();
     let quote_pck_cert_chain =
-        X509::stack_from_pem(&cert_data_ascii_decoded.to_mut()[..].as_bytes()).unwrap();
-
-    // This gets individual certificates from the Quote's PCK chain.
+        X509::stack_from_pem(&cert_data_utf8_decoded.to_mut()[..].as_bytes()).unwrap();
     let quote_leaf_cert = &quote_pck_cert_chain[0];
 
     // This makes the Quote parseable and returns the Quote's signature section.
@@ -51,20 +49,18 @@ fn main() {
     let q_att_key_pub = q_sig.attestation_public_key();
     let q_auth_data = q_sig.authentication_data();
 
-    // This loads the certificate chain from the file provided in the
-    // command line.
-    let args: Vec<String> = env::args().collect();
-    if args.len() != 2 {
-        panic!("You must supply the path of a valid PCK certificate chain as the first argument.");
-    }
-    let cert_chain_file = env::args().nth(1).unwrap();
-    let cert_chain_file_contents = fs::read_to_string(&cert_chain_file[..]).unwrap();
+    // The tenant's PCK certificate chain is loaded.
+    let cert_chain_file = env::args()
+        .nth(1)
+        .expect("You must supply the path of a valid PCK certificate chain as the first argument.");
+    let cert_chain_file_contents = fs::read_to_string(&cert_chain_file[..])
+        .expect("PCK cert chain file path invalid.");
     let pck_cert_chain = X509::stack_from_pem(cert_chain_file_contents.as_bytes()).unwrap();
     println!("Tenant's PCK cert chain loaded...");
 
     // This verifies the PCK certificate chain issuers and signatures.
-    let mut cert_chain = cert_chain::CertChain::default();
-    cert_chain.set_chain(pck_cert_chain.clone());
+    //let mut cert_chain = cert_chain::CertChain::default();
+    let cert_chain = cert_chain::CertChain::new_from_chain(pck_cert_chain.clone());
     cert_chain.clone().len_ok();
     cert_chain.clone().verify_issuers();
     cert_chain.verify_sigs(&quote_leaf_cert);

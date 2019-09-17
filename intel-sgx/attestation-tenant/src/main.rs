@@ -5,7 +5,6 @@ mod sig;
 use bufstream::BufStream;
 use dcap_ql::quote::*;
 use openssl::x509::*;
-use percent_encoding::percent_decode;
 use std::{
     borrow::Borrow,
     convert::TryFrom,
@@ -29,6 +28,7 @@ fn main() {
     // The Quoting Enclave's Attestation Key signed the Quote Header (Quote bytes 0-48)
     // concatenated with the ISV Enclave Report (Quote bytes 49-432).
     let ak_signed_material = dcap_ql::quote::Quote::raw_header_and_body(&quote).unwrap();
+    
     let hashed_reportdata = dcap_ql::quote::Quote::raw_pck_hash(&quote).unwrap();
 
     // This makes the Quote parseable and returns the Quote's signature section.

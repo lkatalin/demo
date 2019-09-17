@@ -11,4 +11,4 @@ edition = "2018"
 # should be enabled when using std::os::fortanix_sgx functionality,
 # ex. ENCLU[EGETKEY] and ENCLU[EREPORT].
 # See more: https://edp.fortanix.com/docs/api/std/os/fortanix_sgx/index.html
-sgx-isa = { version = "0.3.1", features = ["sgxstd"] }
+sgx-isa = { version = "0.3.0", features = ["sgxstd"] }

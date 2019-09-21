@@ -6,7 +6,7 @@ const LISTENER_ADDR: &'static str = "localhost:1032";
 const SER_TARGETINFO_SIZE: usize = 196;
 
 fn main() {
-    println!("\nListening on port 1032....\n");
+    println!("\nListening on {}....\n", LISTENER_ADDR);
 
     // The enclave handles each incoming connection from attestation daemon.
     for stream in TcpListener::bind(LISTENER_ADDR).unwrap().incoming() {

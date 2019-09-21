@@ -31,8 +31,6 @@ fn main() {
 
         // The enclave sends its attestation Report back to the attestation daemon.
         let ser_report = serde_json::to_string(&report).unwrap();
-
-        println!("ser report size: {}", ser_report.as_bytes().len());
         stream.write(&ser_report.as_bytes()).unwrap();
         println!("Successfully sent report to daemon.");
     }

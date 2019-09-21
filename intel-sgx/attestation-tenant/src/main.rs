@@ -2,6 +2,7 @@ mod cert_chain;
 mod key;
 mod sig;
 
+use percent_encoding::percent_decode;
 use bufstream::BufStream;
 use dcap_ql::quote::*;
 use openssl::x509::*;
@@ -27,25 +28,20 @@ fn main() {
 
     // The Quoting Enclave's Attestation Key signed the Quote Header (Quote bytes 0-48)
     // concatenated with the ISV Enclave Report (Quote bytes 49-432).
-    let ak_signed_material = dcap_ql::quote::Quote::raw_header_and_body(&quote).unwrap();
-    
-    let hashed_reportdata = dcap_ql::quote::Quote::raw_pck_hash(&quote).unwrap();
+    let ak_signed_material = &quote[0..432].to_vec();
+
+    let cert_data = &quote[1052..].to_vec();
+    let cert_data_utf8_decoded = percent_decode(cert_data)
+                .decode_utf8()
+                .unwrap()
+                .into_owned();
+            let quote_pck_cert_chain =
+                X509::stack_from_pem(&cert_data_utf8_decoded.as_bytes()[..]).unwrap();
+            let quote_leaf_cert = &quote_pck_cert_chain[0];
 
     // This makes the Quote parseable and returns the Quote's signature section.
     let quote = dcap_ql::quote::Quote::parse(&quote).unwrap();
     let q_sig = quote.signature::<Quote3SignatureEcdsaP256>().unwrap();
-    let cert_data = q_sig.certification_data::<Qe3CertDataPckCertChain>().unwrap();
-    let quote_leaf_cert = cert_data.leaf_cert;
-
-    //let cert_data = &quote[1052..].to_vec();
-    //let cert_data_utf8_decoded = percent_decode(cert_data)
-        //        .decode_utf8()
-        //        .unwrap()
-        //        .into_owned();
-        //    let quote_pck_cert_chain =
-        //        X509::stack_from_pem(&cert_data_utf8_decoded.as_bytes()[..]).unwrap();
-        //    let quote_leaf_cert = &quote_pck_cert_chain[0];
-
 
     // This parses the Quote's signature section.
     let q_enclave_report_sig = q_sig.signature();
@@ -95,6 +91,7 @@ fn main() {
     // This verifies that the hashed material signed by the PCK is correct.
     //verify_pck_hash(&q_qe_report, &q_att_key_pub, &q_auth_data);
     //let hashed_reportdata = &q_qe_report[320..352];
+    let hashed_reportdata = &q_qe_report[320..352];
     let mut unhashed_data = Vec::new();
     unhashed_data.extend(q_att_key_pub.to_vec());
     unhashed_data.extend(q_auth_data.to_vec());

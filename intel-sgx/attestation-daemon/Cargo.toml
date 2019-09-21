@@ -10,6 +10,7 @@ hex = "0.3.1"
 #sgx-isa = "0.3.1"
 dcap-ql = "0.2.0"
 serde_json = "1.0.40"
+bufstream = "0.1.4"
 
 [dependencies.sgx-isa]
 version = "0.3.1"

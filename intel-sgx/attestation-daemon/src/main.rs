@@ -25,7 +25,7 @@ fn main() {
 
         // The attestation daemon receives the Report back from the attesting enclave.
         //let mut report_buf = [0; sgx_isa::Report::UNPADDED_SIZE];
-        let mut report_buf = [0; 694];
+        let mut report_buf = [0; 700];
         
         enclave_cnx
             .read_exact(&mut report_buf)

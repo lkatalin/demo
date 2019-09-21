@@ -37,6 +37,16 @@ fn main() {
     let cert_data = q_sig.certification_data::<Qe3CertDataPckCertChain>().unwrap();
     let quote_leaf_cert = cert_data.leaf_cert;
 
+    //let cert_data = &quote[1052..].to_vec();
+    //let cert_data_utf8_decoded = percent_decode(cert_data)
+        //        .decode_utf8()
+        //        .unwrap()
+        //        .into_owned();
+        //    let quote_pck_cert_chain =
+        //        X509::stack_from_pem(&cert_data_utf8_decoded.as_bytes()[..]).unwrap();
+        //    let quote_leaf_cert = &quote_pck_cert_chain[0];
+
+
     // This parses the Quote's signature section.
     let q_enclave_report_sig = q_sig.signature();
     let q_qe_report = q_sig.qe3_report();

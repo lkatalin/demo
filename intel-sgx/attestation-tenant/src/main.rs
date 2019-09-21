@@ -24,6 +24,7 @@ fn main() {
     // The tenant receives a Quote of known length from the platform's attestation
     // daemon. This Quote verifies the enclave's measurement from its Report.
     let mut quote: [u8; 4702] = [0; 4702];
+    //let mut quote: [u8; 4266] = [0; 4266];
     daemon_buf.read_exact(&mut quote).unwrap();
 
     // The Quoting Enclave's Attestation Key signed the Quote Header (Quote bytes 0-48)

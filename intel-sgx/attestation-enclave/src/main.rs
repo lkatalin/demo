@@ -1,4 +1,4 @@
-use sgx_isa::{Report, Targetinfo};
+use sgx_isa::Report;
 use std::io::{Read, Write};
 use std::net::TcpListener;
 
@@ -25,8 +25,9 @@ fn main() {
         // The enclave creates a Report attesting its identity, with the Quoting
         // Enclave (whose identity was just received) as the Report's target. The
         // blank ReportData field must be passed in as a &[u8; 64].
-        let mut report_data = [0u8; 64];
+        let report_data = [0u8; 64];
         let report = Report::for_target(&qe_id, &report_data);
+        println!("created report");
 
         // The enclave sends its attestation Report back to the attestation daemon.
         let ser_report = serde_json::to_string(&report).unwrap();

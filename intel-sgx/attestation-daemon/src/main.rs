@@ -17,17 +17,17 @@ fn main() {
         // sends the Quoting Enclave's Target Info to the enclave. This Target Info will be
         // used as the target for the enclave's attestation Report.
         let qe_ti = dcap_ql::target_info().expect("Could not retrieve QE target info.");
-        //let serialized_qe_ti = serde_json::to_string(&qe_ti).unwrap();
-        let serialized_qe_ti = serde_json::to_vec(&qe_ti).unwrap();
+        let serialized_qe_ti = serde_json::to_string(&qe_ti).unwrap();
+        //let serialized_qe_ti = serde_json::to_vec(&qe_ti).unwrap();
         println!("serialized qe ti len: {:?}", serialized_qe_ti.len());
 
-        enclave_cnx.write(&serialized_qe_ti[..]).unwrap();
-        //enclave_cnx.write(&serialized_qe_ti.as_bytes()).unwrap();
+        //enclave_cnx.write(&serialized_qe_ti[..]).unwrap();
+        enclave_cnx.write(&serialized_qe_ti.as_bytes()).unwrap();
         //enclave_cnx.write(&qe_ti.as_ref()).unwrap();
 
         // The attestation daemon receives the Report back from the attesting enclave.
         //let mut report_buf = [0; sgx_isa::Report::UNPADDED_SIZE];
-        let mut report_buf = [0; 700];
+        let mut report_buf = [0; 684];
         
         enclave_cnx
             .read_exact(&mut report_buf)

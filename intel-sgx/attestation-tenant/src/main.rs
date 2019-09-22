@@ -38,24 +38,16 @@ fn main() {
     daemon_buf.write(&b"Request attestation"[..]).unwrap();
 
     // The tenant receives a Quote from the platform's attestation
-    // daemon. This Quote verifies the enclave's self-measurement in its Report.
+    // daemon. This Quote verifies the enclave's self-measurement from its Report.
     let mut quote = [0u8; VEC_QUOTE_SIZE];
     daemon_buf.read_exact(&mut quote).unwrap();
 
-    // The Quoting Enclave's Attestation Key signed the Quote Header (Quote bytes 0-48)
-    // concatenated with the ISV Enclave Report (Quote bytes 49-432).
-    let att_key_signed_material = &quote[0..AK_SIGNED_MATERIAL_LEN].to_vec();
+    // The signed material for the Quoting Enclave's Attestation Key (Quote Header ||
+    // ISV Enclave Report) is retrieved.
+    let att_key_signed_material = dcap_ql::quote::Quote::raw_header_and_body(&quote).unwrap();
 
-    // The Quote's Certification Data contains the PCK Cert Chain and PCK Certificate;
-    // the embedded PCK signs the Attestation Key.
-    let cert_data = &quote[CERT_DATA_START_OFFSET..].to_vec();
-    let cert_data_utf8_decoded = percent_decode(cert_data)
-        .decode_utf8()
-        .unwrap()
-        .into_owned();
-    let quote_pck_cert_chain =
-        X509::stack_from_pem(&cert_data_utf8_decoded.as_bytes()[..]).unwrap();
-    let quote_pck_leaf_cert = &quote_pck_cert_chain[0];
+    // The hashed material (containing the Attestation Key) signed by the PCK is retrieved.
+    let hashed_reportdata = dcap_ql::quote::Quote::raw_pck_hash(&quote).unwrap();
 
     // This parses the Quote's signature section.
     let quote = dcap_ql::quote::Quote::parse(&quote).unwrap();
@@ -66,8 +58,16 @@ fn main() {
     let q_att_key_pub = q_sig.attestation_public_key();
     let q_auth_data = q_sig.authentication_data();
 
-    // The tenant's PCK certificate chain must be loaded to verify the Quote's PCK Leaf Certificate.
-    // The root certificate in this chain is trusted, since it is provided by the tenant.
+    // The Quote's Certification Data contains the PCK Cert Chain and PCK Certificate;
+    // the embedded PCK signs the Attestation Key.
+    let cert_data = q_sig
+        .certification_data::<Qe3CertDataPckCertChain>()
+        .unwrap();
+    let quote_pck_leaf_cert = cert_data.leaf_cert;
+
+    // The tenant's PCK certificate chain must be loaded to verify the Quote's PCK Leaf
+    // Certificate. The root certificate in this chain is trusted, since it is provided by the
+    // tenant.
     let cert_chain_file = env::args()
         .nth(1)
         .expect("You must supply the path of a valid PCK certificate chain as the first argument.");
@@ -106,7 +106,6 @@ fn main() {
     println!("PCK signature on AK is valid...");
 
     // This verifies that the hashed material signed by the PCK is correct.
-    let hashed_reportdata = &q_qe_report[HASHED_REPORT_DATA_START..HASHED_REPORT_DATA_END];
     let mut unhashed_data = Vec::new();
     unhashed_data.extend(q_att_key_pub.to_vec());
     unhashed_data.extend(q_auth_data.to_vec());

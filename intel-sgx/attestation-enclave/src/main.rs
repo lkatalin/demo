@@ -2,26 +2,30 @@ use sgx_isa::{Report, Targetinfo};
 use std::io::{Read, Write};
 use std::net::TcpListener;
 
-fn main() {
-    println!("\nListening on port 1032....\n");
+const LISTENER_ADDR: &'static str = "localhost:1032";
 
-    // This enclave handles each incoming connection from attestation daemon.
-    for stream in TcpListener::bind("localhost:1032").unwrap().incoming() {
+fn main() {
+    println!("\nListening on {}....\n", LISTENER_ADDR);
+
+    // The enclave handles each incoming connection from attestation daemon.
+    for stream in TcpListener::bind(LISTENER_ADDR).unwrap().incoming() {
         let mut stream = stream.unwrap();
 
-        // This enclave receives the identity of the Quoting Enclave from the
-        // attestation daemon, in the form of a TargetInfo structure. The 
+        // The enclave receives the identity of the Quoting Enclave from the
+        // attestation daemon, in the form of a TargetInfo structure. The
         // TargetInfo contains the measurement and attribute flags of the
         // Quoting Enclave.
         let mut buf = [0; Targetinfo::UNPADDED_SIZE];
         stream.read_exact(&mut buf).unwrap();
         let qe_id = Targetinfo::try_copy_from(&buf).unwrap();
 
-        // This enclave creates a Report attesting its identity, with the Quoting
-        // Enclave as the Report's target.
-        let report = Report::for_target(&qe_id, &[0; 64]);
+        // The enclave creates a Report attesting its identity, with the Quoting
+        // Enclave (whole identity was just received) as the Report's target. The
+        // blank ReportData field must be passed in as a &[u8; 64].
+        let report_data = [0u8; 64];
+        let report = Report::for_target(&qe_id, &report_data);
 
-        // This enclave sends its attestation Report back to the attestation 
+        // The enclave sends its attestation Report back to the attestation
         // daemon.
         stream.write(&report.as_ref()).unwrap();
         println!("Successfully sent report to daemon.");

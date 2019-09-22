@@ -5,7 +5,6 @@ mod sig;
 use bufstream::BufStream;
 use dcap_ql::quote::*;
 use openssl::x509::*;
-use percent_encoding::percent_decode;
 use std::{
     borrow::Borrow,
     convert::TryFrom,
@@ -17,10 +16,6 @@ use std::{
 
 const DAEMON_CONN: &'static str = "localhost:1034";
 const VEC_QUOTE_SIZE: usize = 4702;
-const AK_SIGNED_MATERIAL_LEN: usize = 432;
-const CERT_DATA_START_OFFSET: usize = 1052;
-const HASHED_REPORT_DATA_START: usize = 320;
-const HASHED_REPORT_DATA_END: usize = 352;
 
 // The tenant requests attestation of an enclave from the platform's attestation daemon, and
 // receives a Quote from the daemon. The Quote verifies the enclave's measurement. The tenant

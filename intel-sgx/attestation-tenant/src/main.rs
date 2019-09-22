@@ -46,8 +46,8 @@ fn main() {
     // concatenated with the ISV Enclave Report (Quote bytes 49-432).
     let att_key_signed_material = &quote[0..AK_SIGNED_MATERIAL_LEN].to_vec();
 
-    // The Quote's Certification Data contains the PCK Cert Chain and PCK Certificate,
-    // which signs the Attestation Key.
+    // The Quote's Certification Data contains the PCK Cert Chain and PCK Certificate;
+    // the embedded PCK signs the Attestation Key.
     let cert_data = &quote[CERT_DATA_START_OFFSET..].to_vec();
     let cert_data_utf8_decoded = percent_decode(cert_data)
         .decode_utf8()

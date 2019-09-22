@@ -3,6 +3,7 @@ members = ['attestation-enclave', 'attestation-daemon', 'attestation-tenant']
 
 [patch.crates-io]
 dcap-ql = { git = "https://github.com/lkatalin/rust-sgx", branch = "quote-pck-cert" }
+sgx-isa = { git = "https://github.com/lkatalin/rust-sgx", branch = "quote-pck-cert"}
 
 #[patch.crates-io]
 #dcap-ql = { path = "../../rust-sgx/dcap-ql" }

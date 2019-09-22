@@ -3,7 +3,7 @@ use std::net::{TcpListener, TcpStream};
 
 const LISTENER_CONN: &'static str = "localhost:1034";
 const ENCLAVE_CONN: &'static str = "localhost:1032";
-const SER_REPORT_SIZE: usize = 699;
+const SER_REPORT_SIZE: usize = 703;
 
 fn main() {
     println!(

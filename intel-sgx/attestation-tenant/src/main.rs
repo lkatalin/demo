@@ -6,6 +6,7 @@ use bufstream::BufStream;
 use dcap_ql::quote::{Qe3CertDataPckCertChain, Quote3SignatureEcdsaP256};
 use openssl::{
     symm::{encrypt, Cipher},
+    rand::rand_bytes,
     sha::sha256,
     x509::*
 };
@@ -141,14 +142,15 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("\nShared secret derived.... ");
 
     // Encrypts values entered by user.
-    let cipher = Cipher::aes_256_cbc();
     let mut data : Vec<u8> = Vec::new();
     data.extend(val1.as_bytes());
     data.extend(val2.as_bytes());
+    let mut iv = [0u8; 16];
+    rand_bytes(&mut iv)?;
     let ciphertext = encrypt(
-        cipher,
+        Cipher::aes_256_cbc(),
         &encr_key,
-        None,
+        Some(&iv),
         &data).unwrap();
     println!("Data encrypted....");
 

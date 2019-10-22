@@ -3,14 +3,18 @@ use std::error::Error;
 use std::io::{Read, Write};
 use std::net::TcpListener;
 
-const LISTENER_ADDR: &'static str = "localhost:1032";
+const DAEMON_LISTENER_ADDR: &'static str = "localhost:1032";
+const TENANT_LISTENER_ADDR: &'static str = "localhost:1066";
 const SER_TARGETINFO_SIZE: usize = 196; // TODO: Hope to not use this.
 
 fn main() -> Result<(), Box<dyn Error>> {
-    println!("\nListening on {}....\n", LISTENER_ADDR);
+    println!("\nListening on {} and {}....\n", DAEMON_LISTENER_ADDR, TENANT_LISTENER_ADDR);
+
+    let daemon_streams = TcpListener::bind(DAEMON_LISTENER_ADDR).unwrap();
+    let tenant_streams = TcpListener::bind(TENANT_LISTENER_ADDR).unwrap();
 
     // The enclave handles each incoming connection from attestation daemon.
-    for stream in TcpListener::bind(LISTENER_ADDR).unwrap().incoming() {
+    for stream in daemon_streams.incoming() {
         let mut stream = stream?;
 
         // The enclave receives the identity of the Quoting Enclave from the
@@ -34,6 +38,18 @@ fn main() -> Result<(), Box<dyn Error>> {
         let ser_report = serde_json::to_string(&report)?;
         stream.write(&ser_report.as_bytes())?;
         println!("Successfully sent report to daemon.");
+    }
+
+    for stream in tenant_streams.incoming() {
+	let mut stream = stream?;
+        
+        let mut buf = [0; 2];
+        stream.read_exact(&mut buf)?;
+        
+        let val1 = buf[0];
+        let val2 = buf[1];
+
+        println!("Received values: {} and {}", val1, val2);
     }
 
     Ok(())

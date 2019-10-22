@@ -61,7 +61,7 @@ impl Key {
     /// These are then converted to PKeys, which can be used for a DH key exchange according to 
     /// https://github.com/sfackler/rust-openssl/blob/master/openssl/src/pkey.rs#L16.
     // TODO: Is this a good curve to use for ECDH keys?
-    pub fn new_pair_SECP256R1() -> Result<Self, Box<dyn Error>> {
+    pub fn new_pair_secp256r1() -> Result<Self, Box<dyn Error>> {
 	let group = EcGroup::from_curve_name(Nid::X9_62_PRIME256V1)?;
 	let eckey_priv = EcKey::generate(&group)?;
 	let pkey_priv = PKey::from_ec_key(eckey_priv.clone())?;
@@ -75,10 +75,6 @@ impl Key {
 
     pub fn return_pubkey(&self) -> &PKey<Public> {
 	&self.pubkey
-    }
-
-    pub fn return_privkey(&self) -> &Option<PKey<Private>> {
-	&self.privkey
     }
 
     /// DHKE deriving shared secret between self's private key and peer's public key.

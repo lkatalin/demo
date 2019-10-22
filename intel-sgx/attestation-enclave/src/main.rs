@@ -8,7 +8,10 @@ const TENANT_LISTENER_ADDR: &'static str = "localhost:1066";
 const SER_TARGETINFO_SIZE: usize = 196; // TODO: Hope to not use this.
 
 fn main() -> Result<(), Box<dyn Error>> {
-    println!("\nListening on {} and {}....\n", DAEMON_LISTENER_ADDR, TENANT_LISTENER_ADDR);
+    println!(
+        "\nListening on {} and {}....\n",
+        DAEMON_LISTENER_ADDR, TENANT_LISTENER_ADDR
+    );
 
     let daemon_streams = TcpListener::bind(DAEMON_LISTENER_ADDR).unwrap();
     let tenant_streams = TcpListener::bind(TENANT_LISTENER_ADDR).unwrap();
@@ -38,18 +41,22 @@ fn main() -> Result<(), Box<dyn Error>> {
         let ser_report = serde_json::to_string(&report)?;
         stream.write(&ser_report.as_bytes())?;
         println!("Successfully sent report to daemon.");
+
+        break;
     }
 
     for stream in tenant_streams.incoming() {
-	let mut stream = stream?;
-        
+        let mut stream = stream?;
+
         let mut buf = [0; 2];
-        stream.read_exact(&mut buf)?;
-        
+        stream.read(&mut buf)?;
+
         let val1 = buf[0];
         let val2 = buf[1];
 
-        println!("Received values: {} and {}", val1, val2);
+        let sum = val1 + val2;
+
+        println!("{} + {} = {}", val1 as char, val2 as char, sum as char);
     }
 
     Ok(())

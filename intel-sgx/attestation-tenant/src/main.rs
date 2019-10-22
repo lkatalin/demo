@@ -5,10 +5,10 @@ mod sig;
 use bufstream::BufStream;
 use dcap_ql::quote::{Qe3CertDataPckCertChain, Quote3SignatureEcdsaP256};
 use openssl::{
-    symm::{encrypt, Cipher},
     rand::rand_bytes,
     sha::sha256,
-    x509::*
+    symm::{encrypt, Cipher},
+    x509::*,
 };
 use std::{
     borrow::Borrow,
@@ -49,8 +49,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         fs::read_to_string(&cert_chain_file[..]).expect("PCK cert chain file path invalid.");
 
     // These arguments are supplied by the tenant. They are the data transmitted to the enclave.
-    let val1 = env::args().nth(2).expect("You must supply two integers between 0 and 9, inclusive.");
-    let val2 = env::args().nth(3).expect("You must supply two integers between 0 and 9, inclusive.");
+    let val1 = env::args()
+        .nth(2)
+        .expect("You must supply two integers between 0 and 4, inclusive.");
+    let val2 = env::args()
+        .nth(3)
+        .expect("You must supply two integers between 0 and 4, inclusive.");
 
     // The tenant requests attestation from the platform's attestation daemon.
     // The actual signal is arbitrary.
@@ -123,8 +127,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     println!("\nQuote verified.");
 
-    // The ECDH key exchange between the tenant and the enclave establishes a secure communication channel 
-    // between them in order to send code and data to the enclave securely after attestation. 
+    // The ECDH key exchange between the tenant and the enclave establishes a secure communication channel
+    // between them in order to send code and data to the enclave securely after attestation.
     // Temporarily we are using a placeholder key generated inside the tenant as the enclave's key (peer key)
     // until the enclave has EC key generation capability via mbedTLS. In a real scenario, the peer key
     // is extracted from the Quote's Report Data.
@@ -132,9 +136,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     // TODO: add report parsing to Fortanix dcap-ql/quote.rs
     // NOTE: this is currently a throwaway value until mbedTLS works in SGX.
     let _peer_pub_eckey = &enclave_report[320..384];
-    
+
     // We are using the mock peer key for now.
-    let mock_peer_eckey = key::Key::new_pair_secp256r1()?;    
+    let mock_peer_eckey = key::Key::new_pair_secp256r1()?;
     let mock_peer_pub_eckey = mock_peer_eckey.return_pubkey();
     let tenant_eckey_pair = key::Key::new_pair_secp256r1()?;
     let shared_secret = tenant_eckey_pair.derive_shared_secret(mock_peer_pub_eckey)?;
@@ -142,22 +146,23 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("\nShared secret derived.... ");
 
     // Encrypts values entered by user.
-    let mut data : Vec<u8> = Vec::new();
+    let mut data: Vec<u8> = Vec::new();
     data.extend(val1.as_bytes());
     data.extend(val2.as_bytes());
     let mut iv = [0u8; 16];
     rand_bytes(&mut iv)?;
-    let ciphertext = encrypt(
-        Cipher::aes_256_cbc(),
-        &encr_key,
-        Some(&iv),
-        &data).unwrap();
+    // This ciphertext is also a placeholder since currently the enclave cannot decrypt it.
+    let _ciphertext = encrypt(Cipher::aes_256_cbc(), &encr_key, Some(&iv), &data).unwrap();
     println!("Data encrypted....");
 
     // Sends encrypted data to the enclave for execution.
     let encl_conn = TcpStream::connect(ENCL_CONN)?;
     let mut encl_buf = BufStream::new(encl_conn);
-    encl_buf.write(&ciphertext)?;
+    // We'll send the ciphertext once we can decrypt it in the enclave.
+    //encl_buf.write(&ciphertext)?;
+
+    // For now, send data unencrypted.
+    encl_buf.write(&data)?;
     println!("Encrypted data sent to enclave.");
 
     Ok(())

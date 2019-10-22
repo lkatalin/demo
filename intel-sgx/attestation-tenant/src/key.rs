@@ -1,9 +1,10 @@
 use openssl::{
     bn::BigNum,
+    derive::Deriver,
     ec::{EcGroup, EcKey},
     hash::MessageDigest,
     nid::Nid,
-    pkey::{PKey, Public},
+    pkey::{PKey, Public, Private},
     sha,
     sign::Verifier,
 };
@@ -27,14 +28,16 @@ impl Display for HashError {
     }
 }
 
-/// This is a wrapper for an openssl::PKey<Public> value that adds methods to create
-/// the key from raw x and y coordinates and verify a signature and SHA256 hash.
+/// This Key is a wrapper for either an openssl::PKey<Public> or a (public, private) pair of PKeys 
+/// with extra functionality, ex. the PKey can be created from raw x and y coordinates and verify 
+/// a signature and SHA256 hash.
 pub struct Key {
-    pkey: PKey<Public>,
+    pubkey: PKey<Public>,
+    privkey: Option<PKey<Private>>,
 }
 
 impl Key {
-    /// This creates a new Key from raw x and y coordinates for the SECP256R1 curve.
+    /// This creates a new public PKey from raw x and y coordinates for the SECP256R1 curve.
     pub fn new_from_xy(xy_coords: &[u8]) -> Result<Self, Box<dyn Error>> {
         let group = EcGroup::from_curve_name(Nid::X9_62_PRIME256V1)?;
         let mut x: [u8; 32] = Default::default();
@@ -46,18 +49,42 @@ impl Key {
         let ec_key = EcKey::from_public_key_affine_coordinates(&group, &xbn, &ybn)?;
         let pkey = PKey::from_ec_key(ec_key)?;
 
-        Ok(Key { pkey: pkey })
+        Ok(Key { pubkey: pkey, privkey: None })
     }
 
     /// This creates a new Key from existing PKey value.
     pub fn new_from_pubkey(pkey: PKey<Public>) -> Self {
-        Key { pkey: pkey }
+        Key { pubkey: pkey, privkey: None }
+    }
+
+    /// This creates a new elliptic curve key pair for the SECP256R1 curve with no other inputs.
+    /// These are then converted to PKeys, which can be used for a DH key exchange according to 
+    /// https://github.com/sfackler/rust-openssl/blob/master/openssl/src/pkey.rs#L16.
+    // TODO: Is this a good curve to use for ECDH keys?
+    pub fn new_pair_SECP256R1() -> Result<Self, Box<dyn Error>> {
+	let group = EcGroup::from_curve_name(Nid::X9_62_PRIME256V1)?;
+	let eckey_priv = EcKey::generate(&group)?;
+	let pkey_priv = PKey::from_ec_key(eckey_priv.clone())?;
+	let eckey_pub = EcKey::from_public_key(&group, eckey_priv.as_ref().public_key())?;
+	let pkey_pub = PKey::from_ec_key(eckey_pub)?;
+	Ok(Key {
+	    pubkey: pkey_pub,
+	    privkey: Some(pkey_priv),
+	})
+     }
+
+    /// DHKE deriving shared secret between self's private key and peer's public key.
+    pub fn derive_shared_secret(&self, peer_key: Key) -> Result<Vec<u8>, Box<dyn Error>> {
+	let priv_key = self.privkey.as_ref().unwrap();
+	let mut deriver = Deriver::new(priv_key)?;
+	deriver.set_peer(peer_key.pubkey.as_ref())?;
+	Ok(deriver.derive_to_vec()?)
     }
 
     /// Given a signature and material that was signed with the Key's PKey value, this
     /// verifies the given signature.
     pub fn verify_sig(&self, signed: &[u8], sig: &Vec<u8>) -> Result<(), Box<dyn Error>> {
-        let mut verifier = Verifier::new(MessageDigest::sha256(), &self.pkey)?;
+        let mut verifier = Verifier::new(MessageDigest::sha256(), &self.pubkey)?;
         verifier.update(signed)?;
         verifier.verify(sig)?;
         Ok(())

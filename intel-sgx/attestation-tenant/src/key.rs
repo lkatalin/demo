@@ -73,11 +73,19 @@ impl Key {
 	})
      }
 
+    pub fn return_pubkey(&self) -> &PKey<Public> {
+	&self.pubkey
+    }
+
+    pub fn return_privkey(&self) -> &Option<PKey<Private>> {
+	&self.privkey
+    }
+
     /// DHKE deriving shared secret between self's private key and peer's public key.
-    pub fn derive_shared_secret(&self, peer_key: Key) -> Result<Vec<u8>, Box<dyn Error>> {
+    pub fn derive_shared_secret(&self, peer_key: &PKey<Public>) -> Result<Vec<u8>, Box<dyn Error>> {
 	let priv_key = self.privkey.as_ref().unwrap();
 	let mut deriver = Deriver::new(priv_key)?;
-	deriver.set_peer(peer_key.pubkey.as_ref())?;
+	deriver.set_peer(peer_key)?;
 	Ok(deriver.derive_to_vec()?)
     }
 

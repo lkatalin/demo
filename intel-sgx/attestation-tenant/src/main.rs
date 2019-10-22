@@ -5,6 +5,10 @@ mod sig;
 use bufstream::BufStream;
 use dcap_ql::quote::{Qe3CertDataPckCertChain, Quote3SignatureEcdsaP256};
 use openssl::x509::*;
+use crypto::{
+    sha2::Sha256,
+    digest::Digest
+};
 use std::{
     borrow::Borrow,
     convert::TryFrom,
@@ -62,6 +66,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // This parses the Quote's signature section.
     let quote = dcap_ql::quote::Quote::parse(&quote)?;
+    let enclave_report = quote.report_body();
     let q_sig = quote.signature::<Quote3SignatureEcdsaP256>()?;
     let q_enclave_report_sig = q_sig.signature();
     let q_qe_report = q_sig.qe3_report();
@@ -111,5 +116,29 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("QE Report's hash is valid....");
 
     println!("\nQuote verified.");
+
+    // The ECDH key exchange between the tenant and the enclave establishes a secure communication channel 
+    // between them in order to send code and data to the enclave securely after attestation. 
+    // Temporarily we are using a placeholder key generated inside the tenant as the enclave's key (peer key)
+    // until the enclave has EC key generation capability via mbedTLS. In a real scenario, the peer key
+    // is extracted from the Quote's Report Data.
+
+    // TODO: add report parsing to Fortanix dcap-ql/quote.rs
+    // NOTE: this is currently a throwaway value until mbedTLS works in SGX.
+    let peer_pub_eckey = &enclave_report[320..384];
+    
+    // use mock peer key for now
+    let mock_peer_eckey = key::Key::new_pair_SECP256R1()?;    
+    let mock_peer_pub_eckey = mock_peer_eckey.return_pubkey(); // use mock peer key for now
+    let tenant_eckey_pair = key::Key::new_pair_SECP256R1()?;
+    let shared_secret = tenant_eckey_pair.derive_shared_secret(mock_peer_pub_eckey)?;
+    let mut hasher = Sha256::new();
+    hasher.input(&shared_secret);
+    let mut hashed_encr_key = [0u8; 256];
+    hasher.result(&mut hashed_encr_key);
+
+    // Send encrypted values entered by user
+    //somestream.write(vals);
+
     Ok(())
 }

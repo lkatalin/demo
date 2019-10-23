@@ -51,10 +51,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     // These arguments are supplied by the tenant. They are the data transmitted to the enclave.
     let val1 = env::args()
         .nth(2)
-        .expect("You must supply two integers between 0 and 4, inclusive.");
+        .expect("You must supply two integers.");
     let val2 = env::args()
         .nth(3)
-        .expect("You must supply two integers between 0 and 4, inclusive.");
+        .expect("You must supply two integers.");
 
     // The tenant requests attestation from the platform's attestation daemon.
     // The actual signal is arbitrary.

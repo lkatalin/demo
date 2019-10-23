@@ -51,12 +51,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         let mut buf = [0; 2];
         stream.read(&mut buf)?;
 
-        let val1 = buf[0];
-        let val2 = buf[1];
+        let val1 = buf[0] as char;
+        let val2 = buf[1] as char;
 
-        let sum = val1 + val2;
+        let sum :u8 = val1.to_digit(10).unwrap() as u8 + val2.to_digit(10).unwrap() as u8;
 
-        println!("{} + {} = {}", val1 as char, val2 as char, sum as char);
+        println!("{} + {} = {}", val1, val2, sum);
     }
 
     Ok(())

@@ -48,15 +48,19 @@ fn main() -> Result<(), Box<dyn Error>> {
     for stream in tenant_streams.incoming() {
         let mut stream = stream?;
 
-        let mut buf = [0; 2];
-        stream.read(&mut buf)?;
+        //let mut buf = [0; 32];
+        //stream.read(&mut buf)?;
 
-        let val1 = buf[0] as char;
-        let val2 = buf[1] as char;
+	let vector: Vec<u32> = serde_json::from_reader(stream)?;
 
-        let sum :u8 = val1.to_digit(10).unwrap() as u8 + val2.to_digit(10).unwrap() as u8;
+	println!("we read: {:?}", vector);
 
-        println!("{} + {} = {}", val1, val2, sum);
+        //let val1 = buf[0] as char;
+        //let val2 = buf[1] as char;
+
+        //let sum :u8 = val1.to_digit(10).unwrap() as u8 + val2.to_digit(10).unwrap() as u8;
+
+        //println!("{} + {} = {}", val1, val2, sum);
     }
 
     Ok(())

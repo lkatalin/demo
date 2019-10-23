@@ -10,6 +10,7 @@ use openssl::{
     symm::{encrypt, Cipher},
     x509::*,
 };
+use serde::{Serialize, Deserialize};
 use std::{
     borrow::Borrow,
     convert::TryFrom,
@@ -145,14 +146,18 @@ fn main() -> Result<(), Box<dyn Error>> {
     let encr_key = sha256(&shared_secret);
     println!("\nShared secret derived.... ");
 
-    // Encrypts values entered by user.
-    let mut data: Vec<u8> = Vec::new();
-    data.extend(val1.as_bytes());
-    data.extend(val2.as_bytes());
+    // Prepares vector of values entered by user.
+    let mut data: Vec<u32> = Vec::new();
+    data.push(val1.parse::<u32>()?);
+    data.push(val2.parse::<u32>()?);
+    let ser_data = serde_json::to_vec(&data).unwrap();
+
+    // Encrypts vector of values entered by user.
     let mut iv = [0u8; 16];
     rand_bytes(&mut iv)?;
     // This ciphertext is also a placeholder since currently the enclave cannot decrypt it.
-    let _ciphertext = encrypt(Cipher::aes_256_cbc(), &encr_key, Some(&iv), &data).unwrap();
+    //let _ciphertext = encrypt(Cipher::aes_256_cbc(), &encr_key, Some(&iv), &data).unwrap();
+    let _ciphertext = encrypt(Cipher::aes_256_cbc(), &encr_key, Some(&iv), &ser_data).unwrap();
     println!("Data encrypted....");
 
     // Sends encrypted data to the enclave for execution.
@@ -162,7 +167,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     //encl_buf.write(&ciphertext)?;
 
     // For now, send data unencrypted.
-    encl_buf.write(&data)?;
+    encl_buf.write(&ser_data)?;
     println!("Encrypted data sent to enclave.");
 
     Ok(())

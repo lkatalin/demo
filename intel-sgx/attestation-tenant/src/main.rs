@@ -10,7 +10,6 @@ use openssl::{
     symm::{encrypt, Cipher},
     x509::*,
 };
-use serde::{Serialize, Deserialize};
 use std::{
     borrow::Borrow,
     convert::TryFrom,
@@ -52,10 +51,17 @@ fn main() -> Result<(), Box<dyn Error>> {
     // These arguments are supplied by the tenant. They are the data transmitted to the enclave.
     let val1 = env::args()
         .nth(2)
-        .expect("You must supply two integers.");
+        .expect("You must supply two integers.").parse::<i32>()?;
     let val2 = env::args()
         .nth(3)
-        .expect("You must supply two integers.");
+        .expect("You must supply two integers.").parse::<i32>()?;
+
+    // The data should not contain negative numbers.
+    if val1 < 0 || val2 < 0 {
+    	panic!("The two integers supplied must be positive.");
+    }
+    let val1 = val1 as u32;
+    let val2 = val2 as u32;
 
     // The tenant requests attestation from the platform's attestation daemon.
     // The actual signal is arbitrary.
@@ -148,27 +154,28 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Prepares vector of values entered by user.
     let mut data: Vec<u32> = Vec::new();
-    data.push(val1.parse::<u32>()?);
-    data.push(val2.parse::<u32>()?);
-    let ser_data = serde_json::to_vec(&data).unwrap();
+    data.push(val1);
+    data.push(val2);
+    let ser_data = serde_json::to_vec(&data)?; 
 
     // Encrypts vector of values entered by user.
     let mut iv = [0u8; 16];
     rand_bytes(&mut iv)?;
     // This ciphertext is also a placeholder since currently the enclave cannot decrypt it.
-    //let _ciphertext = encrypt(Cipher::aes_256_cbc(), &encr_key, Some(&iv), &data).unwrap();
     let _ciphertext = encrypt(Cipher::aes_256_cbc(), &encr_key, Some(&iv), &ser_data).unwrap();
     println!("Data encrypted....");
 
     // Sends encrypted data to the enclave for execution.
     let encl_conn = TcpStream::connect(ENCL_CONN)?;
     let mut encl_buf = BufStream::new(encl_conn);
-    // We'll send the ciphertext once we can decrypt it in the enclave.
+    // We'll send the serialized ciphertext once we can decrypt it in the enclave.
+    //let ser_ciphertext = serde_json::to_vec(&_ciphertext)?;
     //encl_buf.write(&ciphertext)?;
 
     // For now, send data unencrypted.
     encl_buf.write(&ser_data)?;
-    println!("Encrypted data sent to enclave.");
+    println!("Data sent to enclave.");
+    //println!("Encrypted data sent to enclave.");
 
     Ok(())
 }

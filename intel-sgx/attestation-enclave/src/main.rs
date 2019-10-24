@@ -49,7 +49,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     for stream in tenant_streams.incoming() {
-	let tenant_data: Vec<u32> = serde_json::from_reader(stream?)?;
+	let mut stream = stream?;
+
+	let tenant_data: Vec<u32> = serde_json::from_reader(&mut stream)?;
 
         let val1 = tenant_data[0];
         let val2 = tenant_data[1];
@@ -60,6 +62,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         // deserialized again to convert from Vec<u8> back to the original Vec<u32>.
 
         println!("\n{} + {} = {}", val1, val2, sum);
+
+	serde_json::to_writer(&mut stream, &sum)?;
+
 	break;
     }
 

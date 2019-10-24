@@ -171,16 +171,21 @@ fn main() -> Result<(), Box<dyn Error>> {
     //println!("Data encrypted....");
 
     // Sends encrypted data to the enclave for execution.
-    let encl_conn = TcpStream::connect(ENCL_CONN)?;
-    let mut encl_buf = BufStream::new(encl_conn);
+    let mut encl_conn = TcpStream::connect(ENCL_CONN)?;
+    //let mut encl_buf = BufStream::new(encl_conn);
     // We'll send the serialized ciphertext once we can decrypt it in the enclave.
     //let ser_ciphertext = serde_json::to_vec(&_ciphertext)?;
     //encl_buf.write(&ciphertext)?;
 
     // For now, send data unencrypted.
-    encl_buf.write(&ser_data)?;
+    //encl_buf.write(&ser_data)?;
+    serde_json::to_writer(&mut encl_conn, &ser_data);
     println!("CLIENT > SERVER: Data");
     //println!("Encrypted data sent to enclave.");
+    encl_conn.shutdown(std::net::Shutdown::Write)?;
+
+    let sum : u32 = serde_json::from_reader(&mut encl_conn)?;
+    println!("{}", sum);
 
     Ok(())
 }

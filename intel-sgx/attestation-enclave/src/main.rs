@@ -3,7 +3,7 @@ use std::error::Error;
 use std::io::{Read, Write};
 use std::net::TcpListener;
 
-const DAEMON_LISTENER_ADDR: &'static str = "localhost:1032";
+const DAEMON_LISTENER_ADDR: &'static str = "localhost:1050";
 const TENANT_LISTENER_ADDR: &'static str = "localhost:1066";
 const SER_TARGETINFO_SIZE: usize = 196; // TODO: Hope to not use this.
 
@@ -60,6 +60,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         // deserialized again to convert from Vec<u8> back to the original Vec<u32>.
 
         println!("\n{} + {} = {}", val1, val2, sum);
+	break;
     }
 
     Ok(())

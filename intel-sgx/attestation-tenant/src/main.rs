@@ -21,7 +21,7 @@ use std::{
     net::TcpStream,
 };
 
-const DAEMON_CONN: &'static str = "localhost:1034";
+const DAEMON_CONN: &'static str = "localhost:1052";
 const ENCL_CONN: &'static str = "localhost:1066";
 
 /// The tenant requests attestation of an enclave from the platform's attestation daemon, and
@@ -73,6 +73,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // daemon. This Quote verifies the enclave's self-measurement from its Report.
     let mut quote = Vec::new();
     daemon_buf.read_to_end(&mut quote)?;
+    println!("CLIENT < SERVER: Quote (Attestation)");
 
     // The signed material for the Quoting Enclave's Attestation Key (Quote Header ||
     // ISV Enclave Report) is retrieved.
@@ -102,18 +103,19 @@ fn main() -> Result<(), Box<dyn Error>> {
         &quote_pck_leaf_cert,
     );
     cert_chain.len_ok()?;
-    println!("Tenant's PCK cert chain loaded...");
+    //println!("Tenant's PCK cert chain loaded...");
 
     // The PCK certificate chain's issuers and signatures are verified.
     cert_chain.verify_issuers()?;
     cert_chain.verify_sigs()?;
-    println!("PCK cert chain verified...");
+    println!("CLIENT: 	 PCK cert chain OK");
 
     // The Attestation Key's signature on the Quote is verified.
     let attestation_key = key::Key::new_from_xy(&q_att_key_pub)?;
     let quote_signature = sig::Signature::try_from(q_enclave_report_sig)?.to_der_vec()?;
     attestation_key.verify_sig(&att_key_signed_material, &quote_signature)?;
-    println!("AK signature on Quote header || report body is valid...");
+    //println!("AK signature on Quote header || report body is valid...");
+    println!("CLIENT: 	 Quote signature OK");
 
     // The PCK's signature on the Attestation Public Key is verified.
     let pc_key = key::Key::new_from_pubkey(quote_pck_leaf_cert.public_key()?);
@@ -121,7 +123,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     pc_key
         .borrow()
         .verify_sig(&q_qe_report, &qe_report_signature)?;
-    println!("PCK signature on AK is valid...");
+    //println!("PCK signature on AK is valid...");
+    println!("CLIENT: 	 Attestation Key signature OK");
 
     // This verifies that the hashed material signed by the PCK is correct.
     let mut unhashed_data = Vec::new();
@@ -130,9 +133,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     pc_key
         .borrow()
         .verify_hash(hashed_reportdata, unhashed_data)?;
-    println!("QE Report's hash is valid....");
+    //println!("QE Report's hash is valid....");
+    println!("CLIENT: 	 Enclave report hash OK");
 
-    println!("\nQuote verified.");
+    //println!("\nQuote verified.");
+    println!("\nCLIENT: 	 Attestation Complete");
 
     // The ECDH key exchange between the tenant and the enclave establishes a secure communication channel
     // between them in order to send code and data to the enclave securely after attestation.
@@ -150,7 +155,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let tenant_eckey_pair = key::Key::new_pair_secp256r1()?;
     let shared_secret = tenant_eckey_pair.derive_shared_secret(mock_peer_pub_eckey)?;
     let encr_key = sha256(&shared_secret);
-    println!("\nShared secret derived.... ");
+    //println!("\nShared secret derived.... ");
 
     // Prepares vector of values entered by user.
     let mut data: Vec<u32> = Vec::new();
@@ -163,7 +168,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     rand_bytes(&mut iv)?;
     // This ciphertext is also a placeholder since currently the enclave cannot decrypt it.
     let _ciphertext = encrypt(Cipher::aes_256_cbc(), &encr_key, Some(&iv), &ser_data).unwrap();
-    println!("Data encrypted....");
+    //println!("Data encrypted....");
 
     // Sends encrypted data to the enclave for execution.
     let encl_conn = TcpStream::connect(ENCL_CONN)?;
@@ -174,7 +179,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // For now, send data unencrypted.
     encl_buf.write(&ser_data)?;
-    println!("Data sent to enclave.");
+    println!("CLIENT > SERVER: Data");
     //println!("Encrypted data sent to enclave.");
 
     Ok(())

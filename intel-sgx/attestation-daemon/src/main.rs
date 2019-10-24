@@ -2,8 +2,8 @@ use std::error::Error;
 use std::io::Write;
 use std::net::{TcpListener, TcpStream};
 
-const LISTENER_CONN: &'static str = "localhost:1034";
-const ENCLAVE_CONN: &'static str = "localhost:1032";
+const LISTENER_CONN: &'static str = "localhost:1052";
+const ENCLAVE_CONN: &'static str = "localhost:1050";
 
 fn main() -> Result<(), Box<dyn Error>> {
     println!(

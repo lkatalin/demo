@@ -147,15 +147,26 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // TODO: add report parsing to Fortanix dcap-ql/quote.rs
     // The compressed EC key is 33 bytes long.
-    let peer_pub_eckey = &enclave_report[320..353];
+    let peer_pub_bytes = &enclave_report[320..353];
+
+    // Convert the enclave's public key to an openssl::PKey.
     let mut ctx = openssl::bn::BigNumContext::new()?; 
-    let mut ctx_ref = &ctx;
-    //let blah = ctx_ref.smh();
-    let ppkey = openssl::ec::EcPoint::from_bytes(
-    	openssl::ec::EcGroup::from_curve_name(openssl::nid::Nid::X9_62_PRIME256V1)?.as_ref(),
-    	&peer_pub_eckey,
+    let curve = openssl::ec::EcGroup::from_curve_name(
+	openssl::nid::Nid::X9_62_PRIME256V1
+    )?;
+    let peer_pub_ecpoint = openssl::ec::EcPoint::from_bytes(
+    	curve.as_ref(),
+    	&peer_pub_bytes,
     	&mut*ctx
     )?;
+    let peer_pub_eckey = openssl::ec::EcKey::from_public_key(
+	curve.as_ref(),
+	peer_pub_ecpoint.as_ref()
+    )?;
+    let peer_pub_pkey = openssl::pkey::PKey::from_ec_key(
+	peer_pub_eckey
+    )?;
+
     //let peer_pub_eckey = openssl::pkey::PKey::public_key_from_der(peer_pub_eckey)?;
     //let printable : Vec<u8> = peer_pub_eckey.into()?;
     //println!("reportdata key has len {}", peer_pub_eckey.bits());

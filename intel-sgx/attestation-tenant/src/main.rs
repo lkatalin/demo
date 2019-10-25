@@ -146,14 +146,26 @@ fn main() -> Result<(), Box<dyn Error>> {
     // is extracted from the Quote's Report Data.
 
     // TODO: add report parsing to Fortanix dcap-ql/quote.rs
-    // NOTE: this is currently a throwaway value until mbedTLS works in SGX.
-    let _peer_pub_eckey = &enclave_report[320..384];
+    // The compressed EC key is 33 bytes long.
+    let peer_pub_eckey = &enclave_report[320..353];
+    let mut ctx = openssl::bn::BigNumContext::new()?; 
+    let mut ctx_ref = &ctx;
+    //let blah = ctx_ref.smh();
+    let ppkey = openssl::ec::EcPoint::from_bytes(
+    	openssl::ec::EcGroup::from_curve_name(openssl::nid::Nid::X9_62_PRIME256V1)?.as_ref(),
+    	&peer_pub_eckey,
+    	&mut*ctx
+    )?;
+    //let peer_pub_eckey = openssl::pkey::PKey::public_key_from_der(peer_pub_eckey)?;
+    //let printable : Vec<u8> = peer_pub_eckey.into()?;
+    //println!("reportdata key has len {}", peer_pub_eckey.bits());
 
     // We are using the mock peer key for now.
     let mock_peer_eckey = key::Key::new_pair_secp256r1()?;
     let mock_peer_pub_eckey = mock_peer_eckey.return_pubkey();
     let tenant_eckey_pair = key::Key::new_pair_secp256r1()?;
-    let shared_secret = tenant_eckey_pair.derive_shared_secret(mock_peer_pub_eckey)?;
+    //let shared_secret = tenant_eckey_pair.derive_shared_secret(mock_peer_pub_eckey)?;
+    let shared_secret = tenant_eckey_pair.derive_shared_secret(&mock_peer_pub_eckey)?;
     let encr_key = sha256(&shared_secret);
     //println!("\nShared secret derived.... ");
 
@@ -174,12 +186,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut encl_conn = TcpStream::connect(ENCL_CONN)?;
     //let mut encl_buf = BufStream::new(encl_conn);
     // We'll send the serialized ciphertext once we can decrypt it in the enclave.
-    //let ser_ciphertext = serde_json::to_vec(&_ciphertext)?;
+    let ser_ciphertext = serde_json::to_vec(&_ciphertext)?;
     //encl_buf.write(&ciphertext)?;
 
     // For now, send data unencrypted.
     //encl_buf.write(&ser_data)?;
-    serde_json::to_writer(&mut encl_conn, &data)?;
+    //serde_json::to_writer(&mut encl_conn, &data)?;
+    serde_json::to_writer(&mut encl_conn, &ser_ciphertext)?;
     println!("CLIENT > SERVER: Data");
     //println!("Encrypted data sent to enclave.");
     encl_conn.shutdown(std::net::Shutdown::Write)?;

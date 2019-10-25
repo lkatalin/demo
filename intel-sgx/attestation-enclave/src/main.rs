@@ -45,10 +45,11 @@ fn main() -> Result<(), Box<dyn Error>> {
 	let ec_pub = ec_key.ec_public()?;
 	let ec_priv = ec_key.ec_private()?;
 
-	let vector_pub = ec_pub.to_binary(&curve, false)?;
+	let vector_pub = ec_pub.to_binary(&curve, true)?;
 	let len = &vector_pub.len();
 
 	println!("length of ec pub key is {}", len);
+	println!("the pubkey is: {:?}", vector_pub);
 	
 	// The enclave creates a Report attesting its identity, with the Quoting
         // Enclave (whose identity was just received) as the Report's target. The
@@ -68,7 +69,16 @@ fn main() -> Result<(), Box<dyn Error>> {
     for stream in tenant_streams.incoming() {
 	let mut stream = stream?;
 
+	// Retrieve tenant pub key and generate same shared secret
+	
+
+	// Deserializes ciphertext
 	let tenant_data: Vec<u32> = serde_json::from_reader(&mut stream)?;
+
+	// Decrypts ciphertext
+        
+
+	// Deserializes plain text
 
         let val1 = tenant_data[0];
         let val2 = tenant_data[1];

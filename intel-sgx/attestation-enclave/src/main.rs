@@ -2,10 +2,19 @@ use sgx_isa::Report;
 use std::error::Error;
 use std::io::{Read, Write};
 use std::net::TcpListener;
+use mbedtls::{
+    ecp::EcGroup,
+    pk::{EcGroupId, Pk},
+    rng::{CtrDrbg, Rdseed},
+};
 
 const DAEMON_LISTENER_ADDR: &'static str = "localhost:1050";
 const TENANT_LISTENER_ADDR: &'static str = "localhost:1066";
 const SER_TARGETINFO_SIZE: usize = 196; // TODO: Hope to not use this.
+
+pub fn entropy_new() -> mbedtls::rng::Rdseed {
+    mbedtls::rng::Rdseed
+}
 
 fn main() -> Result<(), Box<dyn Error>> {
     println!(
@@ -33,7 +42,11 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         // TODO: Use mbedTLS to generate an EC key pair. Insert the public key into 
         // the ReportData field below.
-        
+	let mut entropy = mbedtls::rng::Rdseed;
+	let mut rng = CtrDrbg::new(&mut entropy, None)?;
+	let curve = EcGroup::new(EcGroupId::SecP256R1)?;
+	let ec_key = Pk::generate_ec(&mut rng, curve)?; 
+	
 	// The enclave creates a Report attesting its identity, with the Quoting
         // Enclave (whose identity was just received) as the Report's target. The
         // blank ReportData field must be passed in as a &[u8; 64].

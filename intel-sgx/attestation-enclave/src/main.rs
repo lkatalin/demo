@@ -53,8 +53,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 	// The enclave creates a Report attesting its identity, with the Quoting
         // Enclave (whose identity was just received) as the Report's target. The
         // blank ReportData field must be passed in as a &[u8; 64].
-        //let report_data = [0u8; 64];
-	let report_data = [0u8; 64];
+        let mut report_data = [0u8; 64];
+	report_data.copy_from_slice(&vector_pub[0..64]);
         let report = Report::for_target(&qe_id, &report_data);
 
         // The enclave sends its attestation Report back to the attestation daemon.

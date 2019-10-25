@@ -179,7 +179,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // For now, send data unencrypted.
     //encl_buf.write(&ser_data)?;
-    serde_json::to_writer(&mut encl_conn, &ser_data);
+    serde_json::to_writer(&mut encl_conn, &data)?;
     println!("CLIENT > SERVER: Data");
     //println!("Encrypted data sent to enclave.");
     encl_conn.shutdown(std::net::Shutdown::Write)?;

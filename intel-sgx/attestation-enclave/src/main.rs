@@ -12,10 +12,6 @@ const DAEMON_LISTENER_ADDR: &'static str = "localhost:1050";
 const TENANT_LISTENER_ADDR: &'static str = "localhost:1066";
 const SER_TARGETINFO_SIZE: usize = 196; // TODO: Hope to not use this.
 
-pub fn entropy_new() -> mbedtls::rng::Rdseed {
-    mbedtls::rng::Rdseed
-}
-
 fn main() -> Result<(), Box<dyn Error>> {
     println!(
         "\nListening on {} and {}....\n",
@@ -40,17 +36,25 @@ fn main() -> Result<(), Box<dyn Error>> {
         stream.read_exact(&mut buf)?;
         let qe_id: sgx_isa::Targetinfo = serde_json::from_slice(&buf)?;
 
-        // TODO: Use mbedTLS to generate an EC key pair. Insert the public key into 
-        // the ReportData field below.
-	let mut entropy = mbedtls::rng::Rdseed;
+        // An EC key pair is generated. The public key is inserted into the ReportData 
+	// field below.
+	let mut entropy = Rdseed;
 	let mut rng = CtrDrbg::new(&mut entropy, None)?;
 	let curve = EcGroup::new(EcGroupId::SecP256R1)?;
-	let ec_key = Pk::generate_ec(&mut rng, curve)?; 
+	let ec_key = Pk::generate_ec(&mut rng, curve.clone())?; 
+	let ec_pub = ec_key.ec_public()?;
+	let ec_priv = ec_key.ec_private()?;
+
+	let vector_pub = ec_pub.to_binary(&curve, false)?;
+	let len = &vector_pub.len();
+
+	println!("length of ec pub key is {}", len);
 	
 	// The enclave creates a Report attesting its identity, with the Quoting
         // Enclave (whose identity was just received) as the Report's target. The
         // blank ReportData field must be passed in as a &[u8; 64].
-        let report_data = [0u8; 64];
+        //let report_data = [0u8; 64];
+	let report_data = [0u8; 64];
         let report = Report::for_target(&qe_id, &report_data);
 
         // The enclave sends its attestation Report back to the attestation daemon.

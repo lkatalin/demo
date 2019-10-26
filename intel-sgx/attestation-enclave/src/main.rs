@@ -12,6 +12,14 @@ const DAEMON_LISTENER_ADDR: &'static str = "localhost:1050";
 const TENANT_LISTENER_ADDR: &'static str = "localhost:1066";
 const SER_TARGETINFO_SIZE: usize = 196; // TODO: Hope to not use this.
 
+// This copies the enclave key to the report data
+fn from_slice(bytes: &[u8]) -> [u8; 64] {
+    let mut array = [0; 64];
+    let bytes = &bytes[..array.len()]; // panics if not enough data
+    array.copy_from_slice(bytes); 
+    array
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     println!(
         "\nListening on {} and {}....\n",
@@ -45,18 +53,20 @@ fn main() -> Result<(), Box<dyn Error>> {
 	let ec_pub = ec_key.ec_public()?;
 	let ec_priv = ec_key.ec_private()?;
 
-	let vector_pub = ec_pub.to_binary(&curve, true)?;
-	let len = &vector_pub.len();
+	let mut report_data = ec_pub.to_binary(&curve, true)?;
+	let len = &report_data.len();
 
-	println!("length of ec pub key is {}", len);
-	println!("the pubkey is: {:?}", vector_pub);
+	//println!("length of ec pub key is {}", len);
+	//println!("the pubkey is: {:?}", vector_pub);
 	
 	// The enclave creates a Report attesting its identity, with the Quoting
         // Enclave (whose identity was just received) as the Report's target. The
         // blank ReportData field must be passed in as a &[u8; 64].
-        let mut report_data = [0u8; 64];
-	report_data.copy_from_slice(&vector_pub[0..64]);
-        let report = Report::for_target(&qe_id, &report_data);
+        //let mut report_data = [0u8; 64];
+	//report_data.copy_from_slice(&vector_pub[0..64]);
+	report_data.extend(&[0u8; 31]);
+        let report_data = from_slice(&report_data);
+	let report = Report::for_target(&qe_id, &report_data);
 
         // The enclave sends its attestation Report back to the attestation daemon.
         let ser_report = serde_json::to_string(&report)?;

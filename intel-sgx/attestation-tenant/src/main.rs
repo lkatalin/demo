@@ -175,6 +175,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mock_peer_eckey = key::Key::new_pair_secp256r1()?;
     let mock_peer_pub_eckey = mock_peer_eckey.return_pubkey();
     let tenant_eckey_pair = key::Key::new_pair_secp256r1()?;
+    let tenant_eckey_pub = tenant_eckey_pair.return_pubkey();
     //let shared_secret = tenant_eckey_pair.derive_shared_secret(mock_peer_pub_eckey)?;
     let shared_secret = tenant_eckey_pair.derive_shared_secret(&mock_peer_pub_eckey)?;
     let encr_key = sha256(&shared_secret);
@@ -203,6 +204,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     // For now, send data unencrypted.
     //encl_buf.write(&ser_data)?;
     //serde_json::to_writer(&mut encl_conn, &data)?;
+
+    // Send the pub key
+    serde_json::to_writer(&mut encl_conn, &tenant_eckey_pub.public_key_to_der()?)?;
+    //encl_conn.shutdown(std::net::Shutdown::Write)?;
+
+    let mut encl_conn = TcpStream::connect(ENCL_CONN)?;
     serde_json::to_writer(&mut encl_conn, &ser_ciphertext)?;
     println!("CLIENT > SERVER: Data");
     //println!("Encrypted data sent to enclave.");

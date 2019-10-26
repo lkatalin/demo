@@ -81,24 +81,27 @@ fn main() -> Result<(), Box<dyn Error>> {
 
 	// Retrieve tenant pub key and generate same shared secret
 	
+	let tenant_pubkey: Vec<u8> = serde_json::from_reader(&mut stream)?;
+	println!("got pub key");
 
 	// Deserializes ciphertext
-	let tenant_data: Vec<u32> = serde_json::from_reader(&mut stream)?;
+	let tenant_data: Vec<u8> = serde_json::from_reader(&mut stream)?;
+	println!("got data");
 
 	// Decrypts ciphertext
         
 
 	// Deserializes plain text
 
-        let val1 = tenant_data[0];
-        let val2 = tenant_data[1];
+        //let val1 = tenant_data[0];
+        //let val2 = tenant_data[1];
 
-        let sum :u32 = val1 + val2;
+        let sum :u32 = 1 + 1; //val1 + val2;
 
 	// Once we have ciphertext, it will need to be decrypted and then 
         // deserialized again to convert from Vec<u8> back to the original Vec<u32>.
 
-        println!("\n{} + {} = {}", val1, val2, sum);
+        println!("\n{} + {} = {}", 1, 1, sum);
 
 	serde_json::to_writer(&mut stream, &sum)?;
 

@@ -83,18 +83,20 @@ fn main() -> Result<(), Box<dyn Error>> {
 	// Retrieve tenant pub key and generate same shared secret
 	
 	let deserializer = serde_json::Deserializer::from_reader(stream.try_clone().unwrap());
-   	let iterator = deserializer.into_iter::<Vec<u8>>();
+   	let mut iterator = deserializer.into_iter::<Vec<u8>>();
    	//for item in iterator {
      	//    println!("Got {:?}", item?);
    	//}
+
+        // unwrapping just once creates type std::result::Result<std::vec::Vec<u8>, serde_json::error::Error>
 	let tenant_key = iterator.next().unwrap().unwrap();
-	let ciphertext = iterator.next().unwrap();
+	let ciphertext = iterator.next().unwrap().unwrap();
 
 	// Generate shared secret
         // ec_priv is the private key
         // cipher is aes_128_gcm
         let ecgroup = EcGroup::new(EcGroupId::SecP256R1)?;
-	let tenant_ecpoint = EcPoint::from_binary(&ecgroup, tenant_key)?;
+	let tenant_ecpoint = EcPoint::from_binary(&ecgroup, &tenant_key)?;
 	// let shared_secret =  
 	//let decrypt_key = //hash of ss
         	

@@ -34,6 +34,7 @@ impl Display for HashError {
 pub struct Key {
     pubkey: PKey<Public>,
     privkey: Option<PKey<Private>>,
+    //eckeypub: Option<EcKey<Public>>,
 }
 
 impl Key {

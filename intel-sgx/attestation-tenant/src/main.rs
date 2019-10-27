@@ -167,19 +167,35 @@ fn main() -> Result<(), Box<dyn Error>> {
 	peer_pub_eckey
     )?;
 
-    //let peer_pub_eckey = openssl::pkey::PKey::public_key_from_der(peer_pub_eckey)?;
-    //let printable : Vec<u8> = peer_pub_eckey.into()?;
-    //println!("reportdata key has len {}", peer_pub_eckey.bits());
-
     // We are using the mock peer key for now.
-    let mock_peer_eckey = key::Key::new_pair_secp256r1()?;
-    let mock_peer_pub_eckey = mock_peer_eckey.return_pubkey();
-    let tenant_eckey_pair = key::Key::new_pair_secp256r1()?;
-    let tenant_eckey_pub = tenant_eckey_pair.return_pubkey();
+    //let mock_peer_eckey = key::Key::new_pair_secp256r1()?;
+    //let mock_peer_pub_eckey = mock_peer_eckey.return_pubkey();
+
+    //let tenant_eckey_pair = key::Key::new_pair_secp256r1()?;
+    //let tenant_eckey_pub = tenant_eckey_pair.return_pubkey();
+
+    // Generate tenant key
+    let group = openssl::ec::EcGroup::from_curve_name(openssl::nid::Nid::X9_62_PRIME256V1)?;
+    let tenant_eckey_priv = openssl::ec::EcKey::generate(&group)?;
+    let tenant_pkey_priv = openssl::pkey::PKey::from_ec_key(tenant_eckey_priv.clone())?;
+    let tenant_eckey_pub = openssl::ec::EcKey::from_public_key(&group, tenant_eckey_priv.as_ref().public_key())?;
+    let mut new_ctx = openssl::bn::BigNumContext::new()?;
+    let tenant_pubkey_bytes = tenant_eckey_pub.public_key().to_bytes(
+	&curve,
+	openssl::ec::PointConversionForm::UNCOMPRESSED,
+	&mut*new_ctx,
+    )?;
+
+
     //let shared_secret = tenant_eckey_pair.derive_shared_secret(mock_peer_pub_eckey)?;
-    let shared_secret = tenant_eckey_pair.derive_shared_secret(&mock_peer_pub_eckey)?;
+    //let shared_secret = tenant_eckey_pair.derive_shared_secret(&peer_pub_pkey)?;
+
+    // Derive shared secret
+    let mut deriver = openssl::derive::Deriver::new(tenant_pkey_priv.as_ref())?;
+    deriver.set_peer(&peer_pub_pkey)?;
+    let shared_secret = deriver.derive_to_vec()?;
+
     let encr_key = sha256(&shared_secret);
-    //println!("\nShared secret derived.... ");
 
     // Prepares vector of values entered by user.
     let mut data: Vec<u32> = Vec::new();
@@ -191,7 +207,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut iv = [0u8; 16];
     rand_bytes(&mut iv)?;
     // This ciphertext is also a placeholder since currently the enclave cannot decrypt it.
-    let _ciphertext = encrypt(Cipher::aes_256_cbc(), &encr_key, Some(&iv), &ser_data).unwrap();
+    // Using a GCM cipher means we do not have to have a separate MAC.
+    let _ciphertext = encrypt(Cipher::aes_128_gcm(), &encr_key, Some(&iv), &ser_data).unwrap();
     //println!("Data encrypted....");
 
     // Sends encrypted data to the enclave for execution.
@@ -205,18 +222,21 @@ fn main() -> Result<(), Box<dyn Error>> {
     //encl_buf.write(&ser_data)?;
     //serde_json::to_writer(&mut encl_conn, &data)?;
 
-    let array1 = [1u32, 2, 3];
-    let array1 = [77u32, 22, 33];
+    //let array1 = [1u32, 2, 3];
+    //let array1 = [77u32, 22, 33];
 
-    serde_json::to_writer(&mut encl_conn, &b"b00")?;
-    serde_json::to_writer(&mut encl_conn, &b"y4h")?;
+    //let a = 13;
+    //let b = 3;
+
+    //serde_json::to_writer(&mut encl_conn, &a)?;
+    //serde_json::to_writer(&mut encl_conn, &b)?;
     
     // Send the pub key
-    //serde_json::to_writer(&mut encl_conn, &tenant_eckey_pub.public_key_to_der()?)?;
+    serde_json::to_writer(&mut encl_conn, &tenant_pubkey_bytes)?;
     //encl_conn.shutdown(std::net::Shutdown::Write)?;
 
     //let mut encl_conn = TcpStream::connect(ENCL_CONN)?;
-    //serde_json::to_writer(&mut encl_conn, &ser_ciphertext)?;
+    serde_json::to_writer(&mut encl_conn, &ser_ciphertext)?;
     println!("CLIENT > SERVER: Data");
     //println!("Encrypted data sent to enclave.");
     encl_conn.shutdown(std::net::Shutdown::Write)?;

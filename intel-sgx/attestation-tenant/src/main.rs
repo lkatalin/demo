@@ -205,12 +205,18 @@ fn main() -> Result<(), Box<dyn Error>> {
     //encl_buf.write(&ser_data)?;
     //serde_json::to_writer(&mut encl_conn, &data)?;
 
+    let array1 = [1u32, 2, 3];
+    let array1 = [77u32, 22, 33];
+
+    serde_json::to_writer(&mut encl_conn, &b"b00")?;
+    serde_json::to_writer(&mut encl_conn, &b"y4h")?;
+    
     // Send the pub key
-    serde_json::to_writer(&mut encl_conn, &tenant_eckey_pub.public_key_to_der()?)?;
+    //serde_json::to_writer(&mut encl_conn, &tenant_eckey_pub.public_key_to_der()?)?;
     //encl_conn.shutdown(std::net::Shutdown::Write)?;
 
-    let mut encl_conn = TcpStream::connect(ENCL_CONN)?;
-    serde_json::to_writer(&mut encl_conn, &ser_ciphertext)?;
+    //let mut encl_conn = TcpStream::connect(ENCL_CONN)?;
+    //serde_json::to_writer(&mut encl_conn, &ser_ciphertext)?;
     println!("CLIENT > SERVER: Data");
     //println!("Encrypted data sent to enclave.");
     encl_conn.shutdown(std::net::Shutdown::Write)?;

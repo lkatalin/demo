@@ -81,12 +81,18 @@ fn main() -> Result<(), Box<dyn Error>> {
 
 	// Retrieve tenant pub key and generate same shared secret
 	
-	let tenant_pubkey: Vec<u8> = serde_json::from_reader(&mut stream)?;
-	println!("got pub key");
+	let deserializer = serde_json::Deserializer::from_reader(stream.try_clone().unwrap());
+   	let iterator = deserializer.into_iter::<serde_json::Value>();
+   	for item in iterator {
+     	    println!("Got {:?}", item?);
+   	}
+
+	//let tenant_pubkey: Vec<u8> = serde_json::from_reader(&mut stream)?;
+	//println!("got pub key");
 
 	// Deserializes ciphertext
-	let tenant_data: Vec<u8> = serde_json::from_reader(&mut stream)?;
-	println!("got data");
+	//let tenant_data: Vec<u8> = serde_json::from_reader(&mut stream)?;
+	//println!("got data");
 
 	// Decrypts ciphertext
         

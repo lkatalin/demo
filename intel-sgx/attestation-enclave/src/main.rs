@@ -3,7 +3,7 @@ use std::error::Error;
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use mbedtls::{
-    ecp::EcGroup,
+    ecp::{EcGroup, EcPoint},
     pk::{EcGroupId, Pk},
     rng::{CtrDrbg, Rdseed},
 };
@@ -29,7 +29,16 @@ fn main() -> Result<(), Box<dyn Error>> {
     let daemon_streams = TcpListener::bind(DAEMON_LISTENER_ADDR).unwrap();
     let tenant_streams = TcpListener::bind(TENANT_LISTENER_ADDR).unwrap();
 
-    // The enclave handles each incoming connection from attestation daemon.
+    // An EC key pair is generated. The public key is inserted into the ReportData 
+    // field below.
+    let mut entropy = Rdseed;
+    let mut rng = CtrDrbg::new(&mut entropy, None)?;
+    let curve = EcGroup::new(EcGroupId::SecP256R1)?;
+    let ec_key = Pk::generate_ec(&mut rng, curve.clone())?; 
+    let ec_pub = ec_key.ec_public()?;
+    let ec_priv = ec_key.ec_private()?;
+   
+     // The enclave handles each incoming connection from attestation daemon.
     for stream in daemon_streams.incoming() {
         let mut stream = stream?;
 
@@ -44,14 +53,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         stream.read_exact(&mut buf)?;
         let qe_id: sgx_isa::Targetinfo = serde_json::from_slice(&buf)?;
 
-        // An EC key pair is generated. The public key is inserted into the ReportData 
-	// field below.
-	let mut entropy = Rdseed;
-	let mut rng = CtrDrbg::new(&mut entropy, None)?;
-	let curve = EcGroup::new(EcGroupId::SecP256R1)?;
-	let ec_key = Pk::generate_ec(&mut rng, curve.clone())?; 
-	let ec_pub = ec_key.ec_public()?;
-	let ec_priv = ec_key.ec_private()?;
 
 	let mut report_data = ec_pub.to_binary(&curve, true)?;
 	let len = &report_data.len();
@@ -82,10 +83,21 @@ fn main() -> Result<(), Box<dyn Error>> {
 	// Retrieve tenant pub key and generate same shared secret
 	
 	let deserializer = serde_json::Deserializer::from_reader(stream.try_clone().unwrap());
-   	let iterator = deserializer.into_iter::<serde_json::Value>();
-   	for item in iterator {
-     	    println!("Got {:?}", item?);
-   	}
+   	let iterator = deserializer.into_iter::<Vec<u8>>();
+   	//for item in iterator {
+     	//    println!("Got {:?}", item?);
+   	//}
+	let tenant_key = iterator.next().unwrap().unwrap();
+	let ciphertext = iterator.next().unwrap();
+
+	// Generate shared secret
+        // ec_priv is the private key
+        // cipher is aes_128_gcm
+        let ecgroup = EcGroup::new(EcGroupId::SecP256R1)?;
+	let tenant_ecpoint = EcPoint::from_binary(&ecgroup, tenant_key)?;
+	// let shared_secret =  
+	//let decrypt_key = //hash of ss
+        	
 
 	//let tenant_pubkey: Vec<u8> = serde_json::from_reader(&mut stream)?;
 	//println!("got pub key");

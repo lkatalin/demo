@@ -186,7 +186,6 @@ fn main() -> Result<(), Box<dyn Error>> {
 	&mut*new_ctx,
     )?;
 
-
     //let shared_secret = tenant_eckey_pair.derive_shared_secret(mock_peer_pub_eckey)?;
     //let shared_secret = tenant_eckey_pair.derive_shared_secret(&peer_pub_pkey)?;
 
@@ -201,6 +200,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut data: Vec<u32> = Vec::new();
     data.push(val1);
     data.push(val2);
+    // the data has to be serialized because it needs to be converted to Vec<u8> to be
+    // passed in to the encryption function
     let ser_data = serde_json::to_vec(&data)?; 
 
     // Encrypts vector of values entered by user.
@@ -208,14 +209,18 @@ fn main() -> Result<(), Box<dyn Error>> {
     rand_bytes(&mut iv)?;
     // This ciphertext is also a placeholder since currently the enclave cannot decrypt it.
     // Using a GCM cipher means we do not have to have a separate MAC.
-    let _ciphertext = encrypt(Cipher::aes_128_gcm(), &encr_key, Some(&iv), &ser_data).unwrap();
+    let aes_cipher = Cipher::aes_256_ctr();
+    let gcm_cipher = Cipher::aes_128_gcm();
+    println!("aes key len is {}, gcm key len is {}", aes_cipher.key_len(), gcm_cipher.key_len());
+
+    let _ciphertext = encrypt(Cipher::aes_256_ctr(), &encr_key, Some(&iv), &ser_data).unwrap();
     //println!("Data encrypted....");
 
     // Sends encrypted data to the enclave for execution.
     let mut encl_conn = TcpStream::connect(ENCL_CONN)?;
     //let mut encl_buf = BufStream::new(encl_conn);
     // We'll send the serialized ciphertext once we can decrypt it in the enclave.
-    let ser_ciphertext = serde_json::to_vec(&_ciphertext)?;
+    //let ser_ciphertext = serde_json::to_vec(&_ciphertext)?;
     //encl_buf.write(&ciphertext)?;
 
     // For now, send data unencrypted.
@@ -236,7 +241,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     //encl_conn.shutdown(std::net::Shutdown::Write)?;
 
     //let mut encl_conn = TcpStream::connect(ENCL_CONN)?;
-    serde_json::to_writer(&mut encl_conn, &ser_ciphertext)?;
+    serde_json::to_writer(&mut encl_conn, &_ciphertext)?;
     println!("CLIENT > SERVER: Data");
     //println!("Encrypted data sent to enclave.");
     encl_conn.shutdown(std::net::Shutdown::Write)?;

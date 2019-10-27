@@ -103,11 +103,11 @@ fn main() -> Result<(), Box<dyn Error>> {
 	let mut entropy = Rdseed;
 	let mut rng2 = CtrDrbg::new(&mut entropy, None)?;
 	
-	let mut shared = [0u8; 32]; // 256 / 8
+	let mut shared_secret = [0u8; 32]; // 256 / 8
 
-	let shared_secret = ec_key.agree(
+	ec_key.agree(
 	    &tenant_pubkey,
-            &mut shared,
+            &mut shared_secret,
             &mut rng2
 	)?;
 	println!("generated shared secret");
@@ -119,7 +119,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 	//let shared_secret : u32 = shared_secret.into();
 
 	//let shared_slice: &[&usize] = &[&shared_secret];
-	let shared_slice = &[shared_secret as u8];
+	//let shared_slice = &[shared_secret as u8];
 
 	//let shared_secret_array = [shared_secret];
 	//let shared_secret_slice : &[&usize] = &shared_secret_array;
@@ -131,7 +131,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 	//println!("updated the hash");
 	//hash.hash(&mut decrypt_key)?;
 
-	let hash = Md::hash(Sha256, shared_slice, &mut decrypt_key);
+	let hash = Md::hash(Sha256, &shared_secret, &mut decrypt_key);
         println!("hashed the secret");
 
 	//let tenant_pubkey: Vec<u8> = serde_json::from_reader(&mut stream)?;

@@ -193,6 +193,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut deriver = openssl::derive::Deriver::new(tenant_pkey_priv.as_ref())?;
     deriver.set_peer(&peer_pub_pkey)?;
     let shared_secret = deriver.derive_to_vec()?;
+    println!("shared secret len is {}", shared_secret.len());
 
     let encr_key = sha256(&shared_secret);
 
@@ -209,41 +210,22 @@ fn main() -> Result<(), Box<dyn Error>> {
     rand_bytes(&mut iv)?;
     // This ciphertext is also a placeholder since currently the enclave cannot decrypt it.
     // Using a GCM cipher means we do not have to have a separate MAC.
-    let aes_cipher = Cipher::aes_256_ctr();
-    let gcm_cipher = Cipher::aes_128_gcm();
-    println!("aes key len is {}, gcm key len is {}", aes_cipher.key_len(), gcm_cipher.key_len());
 
     let _ciphertext = encrypt(Cipher::aes_256_ctr(), &encr_key, Some(&iv), &ser_data).unwrap();
     //println!("Data encrypted....");
 
     // Sends encrypted data to the enclave for execution.
     let mut encl_conn = TcpStream::connect(ENCL_CONN)?;
-    //let mut encl_buf = BufStream::new(encl_conn);
-    // We'll send the serialized ciphertext once we can decrypt it in the enclave.
-    //let ser_ciphertext = serde_json::to_vec(&_ciphertext)?;
-    //encl_buf.write(&ciphertext)?;
-
-    // For now, send data unencrypted.
-    //encl_buf.write(&ser_data)?;
-    //serde_json::to_writer(&mut encl_conn, &data)?;
-
-    //let array1 = [1u32, 2, 3];
-    //let array1 = [77u32, 22, 33];
-
-    //let a = 13;
-    //let b = 3;
-
-    //serde_json::to_writer(&mut encl_conn, &a)?;
-    //serde_json::to_writer(&mut encl_conn, &b)?;
     
     // Send the pub key
-    serde_json::to_writer(&mut encl_conn, &tenant_pubkey_bytes)?;
-    //encl_conn.shutdown(std::net::Shutdown::Write)?;
+    let tenant_pkey_pub = openssl::pkey::PKey::from_ec_key(tenant_eckey_pub.clone())?;
+    let tenant_pkey_pub_der = tenant_pkey_pub.public_key_to_der()?;
+    //serde_json::to_writer(&mut encl_conn, &tenant_pubkey_bytes)?;
+    serde_json::to_writer(&mut encl_conn, &tenant_pkey_pub_der)?;
 
     //let mut encl_conn = TcpStream::connect(ENCL_CONN)?;
     serde_json::to_writer(&mut encl_conn, &_ciphertext)?;
-    println!("CLIENT > SERVER: Data");
-    //println!("Encrypted data sent to enclave.");
+    println!("CLIENT > SERVER: Tenant PubKey and Data");
     encl_conn.shutdown(std::net::Shutdown::Write)?;
 
     let sum : u32 = serde_json::from_reader(&mut encl_conn)?;

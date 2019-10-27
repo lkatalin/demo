@@ -34,7 +34,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut entropy = Rdseed;
     let mut rng = CtrDrbg::new(&mut entropy, None)?;
     let curve = EcGroup::new(EcGroupId::SecP256R1)?;
-    let ec_key = Pk::generate_ec(&mut rng, curve.clone())?; 
+    let mut ec_key = Pk::generate_ec(&mut rng, curve.clone())?; 
     let ec_pub = ec_key.ec_public()?;
     let ec_priv = ec_key.ec_private()?;
    
@@ -94,10 +94,20 @@ fn main() -> Result<(), Box<dyn Error>> {
 
 	// Generate shared secret
         // ec_priv is the private key
-        // cipher is aes_128_gcm
+        // cipher is aes_256_ctr
         let ecgroup = EcGroup::new(EcGroupId::SecP256R1)?;
-	let tenant_ecpoint = EcPoint::from_binary(&ecgroup, &tenant_key)?;
-	// let shared_secret =  
+	//let tenant_pubkey_ecpoint = EcPoint::from_binary(&ecgroup, &tenant_key)?;
+	let tenant_pubkey = Pk::from_public_key(&tenant_key)?;
+	let mut entropy = Rdseed;
+	let mut rng2 = CtrDrbg::new(&mut entropy, None)?;
+	
+	let mut shared = [0u8; 32]; // 256 / 8
+
+	let shared_secret = ec_key.agree(
+	    &tenant_pubkey,
+            &mut shared,
+            &mut rng2
+	)?;
 	//let decrypt_key = //hash of ss
         	
 

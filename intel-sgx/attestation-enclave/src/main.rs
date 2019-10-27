@@ -3,6 +3,7 @@ use std::error::Error;
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use mbedtls::{
+    hash::{Md, Type::Sha256},
     ecp::{EcGroup, EcPoint},
     pk::{EcGroupId, Pk},
     rng::{CtrDrbg, Rdseed},
@@ -108,7 +109,23 @@ fn main() -> Result<(), Box<dyn Error>> {
             &mut shared,
             &mut rng2
 	)?;
-	//let decrypt_key = //hash of ss
+	//let shared_secret : u64 = shared_secret_tmp as u64;
+	//let mut shared_secret_vec = Vec::new();
+	//shared_secret_vec.push(shared_secret);
+	//let shared_secret_vec : Vec<u8> = shared_secret_vec.into();
+	//let shared_secret : u32 = shared_secret.into();
+
+	let str_slice: &[&str] = &["one", "two", "three"];
+	//let shared_slice: &[&usize] = &[&shared_secret];
+	let shared_slice = &[shared_secret as u8];
+
+	//let shared_secret_array = [shared_secret];
+	//let shared_secret_slice : &[&usize] = &shared_secret_array;
+
+	let mut decrypt_key = Vec::new();	
+	let mut hash = Md::new(Sha256)?;
+	hash.update(shared_slice)?;
+	hash.finish(&decrypt_key)?;
         	
 
 	//let tenant_pubkey: Vec<u8> = serde_json::from_reader(&mut stream)?;

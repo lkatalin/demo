@@ -92,6 +92,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         // unwrapping just once creates type std::result::Result<std::vec::Vec<u8>, serde_json::error::Error>
 	let tenant_key = iterator.next().unwrap().unwrap();
 	let ciphertext = iterator.next().unwrap().unwrap();
+	println!("got tenant key and ciphertext");
 
 	// Generate shared secret
         // ec_priv is the private key
@@ -109,24 +110,29 @@ fn main() -> Result<(), Box<dyn Error>> {
             &mut shared,
             &mut rng2
 	)?;
+	println!("generated shared secret");
+
 	//let shared_secret : u64 = shared_secret_tmp as u64;
 	//let mut shared_secret_vec = Vec::new();
 	//shared_secret_vec.push(shared_secret);
 	//let shared_secret_vec : Vec<u8> = shared_secret_vec.into();
 	//let shared_secret : u32 = shared_secret.into();
 
-	let str_slice: &[&str] = &["one", "two", "three"];
 	//let shared_slice: &[&usize] = &[&shared_secret];
 	let shared_slice = &[shared_secret as u8];
 
 	//let shared_secret_array = [shared_secret];
 	//let shared_secret_slice : &[&usize] = &shared_secret_array;
 
-	let mut decrypt_key = Vec::new();	
-	let mut hash = Md::new(Sha256)?;
-	hash.update(shared_slice)?;
-	hash.finish(&decrypt_key)?;
-        	
+	let mut decrypt_key = [0u8; 32];
+	//let mut decrypt_key = Vec::new();	
+	//let mut hash = Md::new(Sha256)?;
+	//hash.update(shared_slice)?;
+	//println!("updated the hash");
+	//hash.hash(&mut decrypt_key)?;
+
+	let hash = Md::hash(Sha256, shared_slice, &mut decrypt_key);
+        println!("hashed the secret");
 
 	//let tenant_pubkey: Vec<u8> = serde_json::from_reader(&mut stream)?;
 	//println!("got pub key");
@@ -136,7 +142,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 	//println!("got data");
 
 	// Decrypts ciphertext
-        
+        //let decrypt_key = EcPoint::from_binary(&ecgroup, &decrypt_key)?; 
 
 	// Deserializes plain text
 

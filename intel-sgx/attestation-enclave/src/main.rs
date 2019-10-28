@@ -3,6 +3,7 @@ use std::error::Error;
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use mbedtls::{
+    cipher::*,
     hash::{Md, Type::Sha256},
     ecp::{EcGroup, EcPoint},
     pk::{EcGroupId, Pk},
@@ -91,7 +92,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         // unwrapping just once creates type std::result::Result<std::vec::Vec<u8>, serde_json::error::Error>
 	let tenant_key = iterator.next().unwrap().unwrap();
-	let ciphertext = iterator.next().unwrap().unwrap();
+	let ciphertext1 = iterator.next().unwrap().unwrap();
+	let ciphertext2 = iterator.next().unwrap().unwrap();
 	println!("got tenant key and ciphertext");
 
 	// Generate shared secret
@@ -112,27 +114,10 @@ fn main() -> Result<(), Box<dyn Error>> {
 	)?;
 	println!("generated shared secret");
 
-	//let shared_secret : u64 = shared_secret_tmp as u64;
-	//let mut shared_secret_vec = Vec::new();
-	//shared_secret_vec.push(shared_secret);
-	//let shared_secret_vec : Vec<u8> = shared_secret_vec.into();
-	//let shared_secret : u32 = shared_secret.into();
-
-	//let shared_slice: &[&usize] = &[&shared_secret];
-	//let shared_slice = &[shared_secret as u8];
-
-	//let shared_secret_array = [shared_secret];
-	//let shared_secret_slice : &[&usize] = &shared_secret_array;
-
 	let mut decrypt_key = [0u8; 32];
-	//let mut decrypt_key = Vec::new();	
-	//let mut hash = Md::new(Sha256)?;
-	//hash.update(shared_slice)?;
-	//println!("updated the hash");
-	//hash.hash(&mut decrypt_key)?;
 
-	let hash = Md::hash(Sha256, &shared_secret, &mut decrypt_key);
-        println!("hashed the secret");
+	Md::hash(Sha256, &shared_secret, &mut decrypt_key);
+        println!("hashed the secret, decrypt key len {}", decrypt_key.len());
 
 	//let tenant_pubkey: Vec<u8> = serde_json::from_reader(&mut stream)?;
 	//println!("got pub key");
@@ -142,7 +127,29 @@ fn main() -> Result<(), Box<dyn Error>> {
 	//println!("got data");
 
 	// Decrypts ciphertext
-        //let decrypt_key = EcPoint::from_binary(&ecgroup, &decrypt_key)?; 
+	
+	let cipher1 = Cipher::<_, Traditional, _>::new(
+        	raw::CipherId::Aes,
+        	raw::CipherMode::CTR,
+       		(decrypt_key.len() * 8) as _,
+    	).unwrap();
+
+	let cipher2 = Cipher::<_, Traditional, _>::new(
+        	raw::CipherId::Aes,
+        	raw::CipherMode::CTR,
+       		(decrypt_key.len() * 8) as _,
+    	).unwrap();
+	
+	let iv = [0u8; 16];
+	let cipher1 = cipher1.set_key_iv(&decrypt_key, &iv)?;
+	let cipher2 = cipher2.set_key_iv(&decrypt_key, &iv)?;
+
+	let mut plaintext1 = [0u8; 1]; 
+	let mut plaintext2 = [0u8; 1]; 
+	cipher1.decrypt(&ciphertext1, &mut plaintext1);
+	cipher2.decrypt(&ciphertext2, &mut plaintext2);
+
+	println!("pt1 is {:?} and pt2 is {:?}", plaintext1, plaintext2);
 
 	// Deserializes plain text
 

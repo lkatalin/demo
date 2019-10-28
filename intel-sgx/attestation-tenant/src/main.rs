@@ -7,7 +7,7 @@ use dcap_ql::quote::{Qe3CertDataPckCertChain, Quote3SignatureEcdsaP256};
 use openssl::{
     rand::rand_bytes,
     sha::sha256,
-    symm::{encrypt, Cipher},
+    symm::{encrypt, encrypt_aead, Cipher},
     x509::*,
 };
 use std::{
@@ -60,8 +60,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     if val1 < 0 || val2 < 0 {
     	panic!("The two integers supplied must be positive.");
     }
-    let val1 = val1 as u32;
-    let val2 = val2 as u32;
+    let val1 = val1 as u8;
+    let val2 = val2 as u8;
 
     // The tenant requests attestation from the platform's attestation daemon.
     // The actual signal is arbitrary.
@@ -193,14 +193,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut deriver = openssl::derive::Deriver::new(tenant_pkey_priv.as_ref())?;
     deriver.set_peer(&peer_pub_pkey)?;
     let shared_secret = deriver.derive_to_vec()?;
-    println!("shared secret len is {}", shared_secret.len());
-
     let encr_key = sha256(&shared_secret);
 
     // Prepares vector of values entered by user.
     let mut data: Vec<u32> = Vec::new();
-    data.push(val1);
-    data.push(val2);
+    data.push(val1.clone().into());
+    data.push(val2.clone().into());
     // the data has to be serialized because it needs to be converted to Vec<u8> to be
     // passed in to the encryption function
     let ser_data = serde_json::to_vec(&data)?; 
@@ -208,11 +206,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Encrypts vector of values entered by user.
     let mut iv = [0u8; 16];
     rand_bytes(&mut iv)?;
-    // This ciphertext is also a placeholder since currently the enclave cannot decrypt it.
-    // Using a GCM cipher means we do not have to have a separate MAC.
 
-    let _ciphertext = encrypt(Cipher::aes_256_ctr(), &encr_key, Some(&iv), &ser_data).unwrap();
-    //println!("Data encrypted....");
+    // No additional auth data for now
+    let _aad = [0u8; 8];
+    let mut _tag = [0u8; 16];
+    //let _ciphertext = encrypt_aead(Cipher::aes_128_gcm(), &encr_key, Some(&iv), &aad, &ser_data, &mut tag).unwrap();
+    let _ciphertext1 = encrypt(Cipher::aes_256_ctr(), &encr_key, Some(&iv), &[val1]).unwrap();
+    let _ciphertext2 = encrypt(Cipher::aes_256_ctr(), &encr_key, Some(&iv), &[val2]).unwrap();
 
     // Sends encrypted data to the enclave for execution.
     let mut encl_conn = TcpStream::connect(ENCL_CONN)?;
@@ -224,7 +224,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     serde_json::to_writer(&mut encl_conn, &tenant_pkey_pub_der)?;
 
     //let mut encl_conn = TcpStream::connect(ENCL_CONN)?;
-    serde_json::to_writer(&mut encl_conn, &_ciphertext)?;
+    serde_json::to_writer(&mut encl_conn, &_ciphertext1)?;
+    serde_json::to_writer(&mut encl_conn, &_ciphertext2)?;
     println!("CLIENT > SERVER: Tenant PubKey and Data");
     encl_conn.shutdown(std::net::Shutdown::Write)?;
 

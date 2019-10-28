@@ -226,6 +226,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     serde_json::to_writer(&mut encl_conn, &tenant_pkey_pub_der)?;
 
     //let mut encl_conn = TcpStream::connect(ENCL_CONN)?;
+    serde_json::to_writer(&mut encl_conn, &iv)?;
     serde_json::to_writer(&mut encl_conn, &_ciphertext1)?;
     serde_json::to_writer(&mut encl_conn, &_ciphertext2)?;
     println!("CLIENT > SERVER: Tenant PubKey and Data");

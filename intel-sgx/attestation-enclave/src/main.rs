@@ -92,9 +92,10 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         // unwrapping just once creates type std::result::Result<std::vec::Vec<u8>, serde_json::error::Error>
 	let tenant_key = iterator.next().unwrap().unwrap();
+	let iv = iterator.next().unwrap().unwrap();
 	let ciphertext1 = iterator.next().unwrap().unwrap();
 	let ciphertext2 = iterator.next().unwrap().unwrap();
-	println!("got tenant key and ciphertext: {:?} and {:?}", ciphertext1, ciphertext2);
+	println!("got ciphertext: {:?} and {:?}", ciphertext1, ciphertext2);
 
 	// Generate shared secret
         // ec_priv is the private key
@@ -117,7 +118,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 	let mut decrypt_key = [0u8; 32];
 
 	Md::hash(Sha256, &shared_secret, &mut decrypt_key);
-        println!("hashed the secret: {:?}", &decrypt_key);
+        println!("decrypt key: {:?}", &decrypt_key);
 
 	//let tenant_pubkey: Vec<u8> = serde_json::from_reader(&mut stream)?;
 	//println!("got pub key");
@@ -140,14 +141,15 @@ fn main() -> Result<(), Box<dyn Error>> {
        		(decrypt_key.len() * 8) as _,
     	).unwrap();
 	
-	let iv = [0u8; 16];
 	let cipher1 = cipher1.set_key_iv(&decrypt_key, &iv)?;
 	let cipher2 = cipher2.set_key_iv(&decrypt_key, &iv)?;
 
-	let mut plaintext1 = [0u8; 1]; 
-	let mut plaintext2 = [0u8; 1]; 
-	cipher1.decrypt(&ciphertext1, &mut plaintext1);
-	cipher2.decrypt(&ciphertext2, &mut plaintext2);
+	let mut plaintext1 = [0u8; 32]; 
+	let mut plaintext2 = [0u8; 32]; 
+
+	println!("about to decrypt");
+	let decrypted1 = cipher1.decrypt(&ciphertext1, &mut plaintext1)?;
+	let decrypted2 = cipher2.decrypt(&ciphertext2, &mut plaintext2)?;
 
 	println!("pt1 is {:?} and pt2 is {:?}", plaintext1, plaintext2);
 

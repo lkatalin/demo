@@ -94,7 +94,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 	let tenant_key = iterator.next().unwrap().unwrap();
 	let ciphertext1 = iterator.next().unwrap().unwrap();
 	let ciphertext2 = iterator.next().unwrap().unwrap();
-	println!("got tenant key and ciphertext");
+	println!("got tenant key and ciphertext: {:?} and {:?}", ciphertext1, ciphertext2);
 
 	// Generate shared secret
         // ec_priv is the private key
@@ -112,12 +112,12 @@ fn main() -> Result<(), Box<dyn Error>> {
             &mut shared_secret,
             &mut rng2
 	)?;
-	println!("generated shared secret");
+	println!("generated shared secret: {:?}", shared_secret);
 
 	let mut decrypt_key = [0u8; 32];
 
 	Md::hash(Sha256, &shared_secret, &mut decrypt_key);
-        println!("hashed the secret, decrypt key len {}", decrypt_key.len());
+        println!("hashed the secret: {:?}", &decrypt_key);
 
 	//let tenant_pubkey: Vec<u8> = serde_json::from_reader(&mut stream)?;
 	//println!("got pub key");

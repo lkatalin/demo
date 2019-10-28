@@ -194,6 +194,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     deriver.set_peer(&peer_pub_pkey)?;
     let shared_secret = deriver.derive_to_vec()?;
     let encr_key = sha256(&shared_secret);
+    println!("generated shared secret: {:?}", shared_secret);
+    println!("encry key: {:?}", encr_key);
 
     // Prepares vector of values entered by user.
     let mut data: Vec<u32> = Vec::new();

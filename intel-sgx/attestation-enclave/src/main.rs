@@ -148,8 +148,11 @@ fn main() -> Result<(), Box<dyn Error>> {
 	let mut plaintext2 = [0u8; 32]; 
 
 	println!("about to decrypt");
-	let decrypted1 = cipher1.decrypt(&ciphertext1, &mut plaintext1)?;
-	let decrypted2 = cipher2.decrypt(&ciphertext2, &mut plaintext2)?;
+	let _ = cipher1.decrypt(&ciphertext1, &mut plaintext1)?;
+	let _ = cipher2.decrypt(&ciphertext2, &mut plaintext2)?;
+
+	let plaintext1 = plaintext1[0];
+	let plaintext2 = plaintext2[0];
 
 	println!("pt1 is {:?} and pt2 is {:?}", plaintext1, plaintext2);
 
@@ -158,12 +161,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         //let val1 = tenant_data[0];
         //let val2 = tenant_data[1];
 
-        let sum :u32 = 1 + 1; //val1 + val2;
+        let sum :u8 = plaintext1 + plaintext2; //val1 + val2;
 
 	// Once we have ciphertext, it will need to be decrypted and then 
         // deserialized again to convert from Vec<u8> back to the original Vec<u32>.
 
-        println!("\n{} + {} = {}", 1, 1, sum);
+        println!("\n{} + {} = {}", plaintext1, plaintext2, sum);
 
 	serde_json::to_writer(&mut stream, &sum)?;
 

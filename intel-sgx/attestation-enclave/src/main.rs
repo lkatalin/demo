@@ -12,7 +12,7 @@ use mbedtls::{
 
 const DAEMON_LISTENER_ADDR: &'static str = "localhost:1050";
 const TENANT_LISTENER_ADDR: &'static str = "localhost:1066";
-const SER_TARGETINFO_SIZE: usize = 196; // TODO: Hope to not use this.
+//const SER_TARGETINFO_SIZE: usize = 196; // TODO: Hope to not use this.
 
 // This copies the enclave key to the report data
 fn from_slice(bytes: &[u8]) -> [u8; 64] {
@@ -50,10 +50,10 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         // TODO: I'd love to be able to read this into a Vec or some other more dynamic way
         // that doesn't involve a buffer of hard-coded size.
-        let mut buf = [0; SER_TARGETINFO_SIZE];
-        stream.read_exact(&mut buf)?;
-        let qe_id: sgx_isa::Targetinfo = serde_json::from_slice(&buf)?;
-
+        //let mut buf = [0; SER_TARGETINFO_SIZE];
+        //stream.read_exact(&mut buf)?;
+        //let qe_id: sgx_isa::Targetinfo = serde_json::from_slice(&buf)?;
+	let qe_id: sgx_isa::Targetinfo = serde_json::from_reader(&mut stream)?;
 
 	let mut report_data = ec_pub.to_binary(&curve, true)?;
 	
@@ -65,8 +65,10 @@ fn main() -> Result<(), Box<dyn Error>> {
 	let report = Report::for_target(&qe_id, &report_data);
 
         // The enclave sends its attestation Report back to the attestation daemon.
-        let ser_report = serde_json::to_string(&report)?;
-        stream.write(&ser_report.as_bytes())?;
+        //let ser_report = serde_json::to_string(&report)?;
+        //stream.write(&ser_report.as_bytes())?;
+	serde_json::to_writer(&mut stream, &report)?;	
+
         println!("Successfully sent report to daemon.");
 
         break;

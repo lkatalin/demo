@@ -18,9 +18,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         // sends the Quoting Enclave's Target Info to the enclave. This Target Info will be
         // used as the target for the enclave's attestation Report.
         let qe_ti = dcap_ql::target_info().expect("Could not retrieve QE target info.");
-        let serialized_qe_ti = serde_json::to_string(&qe_ti)?;
+        //let serialized_qe_ti = serde_json::to_string(&qe_ti)?;
         let mut enclave_stream = TcpStream::connect(ENCLAVE_CONN)?;
-        enclave_stream.write(&serialized_qe_ti.as_bytes())?;
+        //enclave_stream.write(&serialized_qe_ti.as_bytes())?;
+	serde_json::to_writer(&mut enclave_stream, &qe_ti)?;
+	enclave_stream.shutdown(std::net::Shutdown::Write)?;	
 
         // The attestation daemon receives the Report back from the attesting enclave.
         let report: sgx_isa::Report = serde_json::from_reader(enclave_stream)?;

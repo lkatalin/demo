@@ -5,7 +5,7 @@ use std::net::TcpListener;
 use mbedtls::{
     cipher::*,
     hash::{Md, Type::Sha256},
-    ecp::EcGroup,
+    ecp::{EcGroup, EcPoint},
     pk::{EcGroupId, Pk},
     rng::{CtrDrbg, Rdseed},
 };
@@ -86,7 +86,11 @@ fn main() -> Result<(), Box<dyn Error>> {
 	let ciphertext2 = iterator.next().unwrap().unwrap();
 
 	// Generate shared secret
-	let tenant_pubkey = Pk::from_public_key(&tenant_key)?;
+	let ecgroup = EcGroup::new(EcGroupId::SecP256R1)?;
+	let tenant_pubkey_ecpoint = EcPoint::from_binary(&ecgroup, &tenant_key)?;
+	let tenant_pubkey = Pk::public_from_ec_components(ecgroup.clone(), tenant_pubkey_ecpoint)?;
+
+	//let tenant_pubkey = Pk::from_public_key(&tenant_key)?;
 	let mut entropy = Rdseed;
 	let mut rng2 = CtrDrbg::new(&mut entropy, None)?;
 	

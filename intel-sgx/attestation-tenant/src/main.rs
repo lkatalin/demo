@@ -181,12 +181,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     let tenant_eckey_priv = openssl::ec::EcKey::generate(&group)?;
     let tenant_pkey_priv = openssl::pkey::PKey::from_ec_key(tenant_eckey_priv.clone())?;
     let tenant_eckey_pub = openssl::ec::EcKey::from_public_key(&group, tenant_eckey_priv.as_ref().public_key())?;
-    //let mut new_ctx = openssl::bn::BigNumContext::new()?;
-    //let tenant_pubkey_bytes = tenant_eckey_pub.public_key().to_bytes(
-    //	&curve,
-    //	openssl::ec::PointConversionForm::UNCOMPRESSED,
-    //	&mut*new_ctx,
-    //)?;
+    let mut new_ctx = openssl::bn::BigNumContext::new()?;
+    let tenant_pubkey_bytes = tenant_eckey_pub.public_key().to_bytes(
+    	&curve,
+    	openssl::ec::PointConversionForm::UNCOMPRESSED,
+    	&mut*new_ctx,
+    )?;
 
     //let shared_secret = tenant_eckey_pair.derive_shared_secret(&peer_pub_pkey)?;
 
@@ -219,7 +219,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Send the pub key
     let tenant_pkey_pub = openssl::pkey::PKey::from_ec_key(tenant_eckey_pub.clone())?;
     let tenant_pkey_pub_der = tenant_pkey_pub.public_key_to_der()?;
-    serde_json::to_writer(&mut encl_conn, &tenant_pkey_pub_der)?;
+    //serde_json::to_writer(&mut encl_conn, &tenant_pkey_pub_der)?;
+    serde_json::to_writer(&mut encl_conn, &tenant_pubkey_bytes)?;
 
     // Send ciphertext
     serde_json::to_writer(&mut encl_conn, &iv)?;

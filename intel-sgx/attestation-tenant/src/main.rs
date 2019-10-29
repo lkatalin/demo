@@ -229,7 +229,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     encl_conn.shutdown(std::net::Shutdown::Write)?;
 
     let sum : u32 = serde_json::from_reader(&mut encl_conn)?;
-    println!(\n"{}", sum);
+    println!("\n{}", sum);
 
     Ok(())
 }

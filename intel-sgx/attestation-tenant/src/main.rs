@@ -150,66 +150,37 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // TODO: add report parsing to Fortanix dcap-ql/quote.rs
     // The compressed EC key is 33 bytes long.
-//    let peer_pub_bytes = &enclave_report[320..353];
     let peer_pub_pkey = key::Key::new_from_bytes(&enclave_report[320..353])?;
 
-    // Convert the enclave's public key to an openssl::PKey.
-    //let mut ctx = openssl::bn::BigNumContext::new()?; 
-    //let curve = openssl::ec::EcGroup::from_curve_name(
-//	openssl::nid::Nid::X9_62_PRIME256V1
-//    )?;
-//    let peer_pub_ecpoint = openssl::ec::EcPoint::from_bytes(
-//    	curve.as_ref(),
-//    	&peer_pub_bytes,
-//    	&mut*ctx
-//    )?;
-//    let peer_pub_eckey = openssl::ec::EcKey::from_public_key(
-//	curve.as_ref(),
-//	peer_pub_ecpoint.as_ref()
- //   )?;
- //   let peer_pub_pkey = openssl::pkey::PKey::from_ec_key(
-//	peer_pub_eckey
-//    )?;
-
-    // TODO: When the key.rs functions can return an EC key, this will be usable,
-    // but that requires some refactoring
+    // Generate tenant key
     let tenant_eckey_pair = key::Key::new_pair_secp256r1()?;
     let tenant_pubkey_bytes = tenant_eckey_pair.return_pubkey_bytes()?;
 
-    // Generate tenant key
-    let shared_secret = tenant_eckey_pair.derive_shared_secret(&peer_pub_pkey.return_pubkey())?;
-
-    // TODO: Put all of these functions in key.rs instead of here
     // Derive shared secret
-    //let mut deriver = openssl::derive::Deriver::new(tenant_pkey_priv.as_ref())?;
-    //deriver.set_peer(&peer_pub_pkey)?;
-    //let shared_secret = deriver.derive_to_vec()?;
+    let shared_secret = tenant_eckey_pair.derive_shared_secret(&peer_pub_pkey.return_pubkey())?;
     let symm_key = sha256(&shared_secret);
-
-    // Encrypts vector of values entered by user.
-    
+ 
+    // TODO: Is there a shorter way to write these two lines in Rust?
     let mut iv = [0u8; 16];
     rand_bytes(&mut iv)?;
 
     // No additional auth data for now
-    let _aad = [0u8; 8];
-    let mut _tag = [0u8; 16];
+    //let _aad = [0u8; 8];
+    //let mut _tag = [0u8; 16];
     //let _ciphertext = encrypt_aead(Cipher::aes_128_gcm(), &encr_key, Some(&iv), &aad, &ser_data, &mut tag).unwrap();
+    
     let ciphertext1 = encrypt(Cipher::aes_256_ctr(), &symm_key, Some(&iv), &[val1]).unwrap();
     let ciphertext2 = encrypt(Cipher::aes_256_ctr(), &symm_key, Some(&iv), &[val2]).unwrap();
 
     // Sends encrypted data to the enclave for execution.
     let mut encl_conn = TcpStream::connect(ENCL_CONN)?;
     
-    // Send the pub key
+    // Send the pub key and ciphertext
     serde_json::to_writer(&mut encl_conn, &tenant_pubkey_bytes)?;
-
-    // Send ciphertext
     serde_json::to_writer(&mut encl_conn, &iv)?;
     serde_json::to_writer(&mut encl_conn, &ciphertext1)?;
     serde_json::to_writer(&mut encl_conn, &ciphertext2)?;
     println!("CLIENT > SERVER: Tenant PubKey and Encrypted Data");
-    encl_conn.shutdown(std::net::Shutdown::Write)?;
 
     let ciphersum : u8 = serde_json::from_reader(&mut encl_conn)?;
     let ciphersum = [ciphersum];

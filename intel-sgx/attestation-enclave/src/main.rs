@@ -12,7 +12,6 @@ use mbedtls::{
 
 const DAEMON_LISTENER_ADDR: &'static str = "localhost:1050";
 const TENANT_LISTENER_ADDR: &'static str = "localhost:1066";
-//const SER_TARGETINFO_SIZE: usize = 196; // TODO: Hope to not use this.
 
 // This copies the enclave key to the report data
 fn from_slice(bytes: &[u8]) -> [u8; 64] {
@@ -48,11 +47,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         // structure. The TargetInfo contains the measurement and attribute flags
         // of the Quoting Enclave.
 
-        // TODO: I'd love to be able to read this into a Vec or some other more dynamic way
-        // that doesn't involve a buffer of hard-coded size.
-        //let mut buf = [0; SER_TARGETINFO_SIZE];
-        //stream.read_exact(&mut buf)?;
-        //let qe_id: sgx_isa::Targetinfo = serde_json::from_slice(&buf)?;
 	let qe_id: sgx_isa::Targetinfo = serde_json::from_reader(&mut stream)?;
 
 	let mut report_data = ec_pub.to_binary(&curve, true)?;
@@ -65,8 +59,6 @@ fn main() -> Result<(), Box<dyn Error>> {
 	let report = Report::for_target(&qe_id, &report_data);
 
         // The enclave sends its attestation Report back to the attestation daemon.
-        //let ser_report = serde_json::to_string(&report)?;
-        //stream.write(&ser_report.as_bytes())?;
 	serde_json::to_writer(&mut stream, &report)?;	
 
         println!("Successfully sent report to daemon.");
@@ -92,7 +84,6 @@ fn main() -> Result<(), Box<dyn Error>> {
 	let tenant_pubkey_ecpoint = EcPoint::from_binary(&ecgroup, &tenant_key)?;
 	let tenant_pubkey = Pk::public_from_ec_components(ecgroup.clone(), tenant_pubkey_ecpoint)?;
 
-	//let tenant_pubkey = Pk::from_public_key(&tenant_key)?;
 	let mut entropy = Rdseed;
 	let mut rng2 = CtrDrbg::new(&mut entropy, None)?;
 	
@@ -103,26 +94,26 @@ fn main() -> Result<(), Box<dyn Error>> {
             &mut rng2
 	)?;
 
-	let mut decrypt_key = [0u8; 32];
+	let mut symm_key = [0u8; 32];
 
-	Md::hash(Sha256, &shared_secret, &mut decrypt_key)?;
+	Md::hash(Sha256, &shared_secret, &mut symm_key)?;
 
 	// Decrypts ciphertext
 	// TODO: Can this use the same cipher?	
 	let cipher1 = Cipher::<_, Traditional, _>::new(
         	raw::CipherId::Aes,
         	raw::CipherMode::CTR,
-       		(decrypt_key.len() * 8) as _,
+       		(symm_key.len() * 8) as _,
     	).unwrap();
 
 	let cipher2 = Cipher::<_, Traditional, _>::new(
         	raw::CipherId::Aes,
         	raw::CipherMode::CTR,
-       		(decrypt_key.len() * 8) as _,
+       		(symm_key.len() * 8) as _,
     	).unwrap();
 	
-	let cipher1 = cipher1.set_key_iv(&decrypt_key, &iv)?;
-	let cipher2 = cipher2.set_key_iv(&decrypt_key, &iv)?;
+	let cipher1 = cipher1.set_key_iv(&symm_key, &iv)?;
+	let cipher2 = cipher2.set_key_iv(&symm_key, &iv)?;
 
 	let mut plaintext1 = [0u8; 32]; 
 	let mut plaintext2 = [0u8; 32]; 
@@ -134,11 +125,24 @@ fn main() -> Result<(), Box<dyn Error>> {
 	let plaintext1 = plaintext1[0];
 	let plaintext2 = plaintext2[0];
 
-        let sum :u8 = plaintext1 + plaintext2; //val1 + val2;
+        let mut sum: Vec<u8> = Vec::new(); 
+	sum.push(plaintext1 + plaintext2);
 
-        println!("\n{} + {} = {}", plaintext1, plaintext2, sum);
+        println!("\n{} + {} = {}", plaintext1, plaintext2, sum[0]);
 
-	serde_json::to_writer(&mut stream, &sum)?;
+	let cipher3 = Cipher::<_, Traditional, _>::new(
+		raw::CipherId::Aes,
+		raw::CipherMode::CTR,
+		(symm_key.len() * 8) as _,
+	).unwrap();
+	let cipher3 = cipher3.set_key_iv(&symm_key, &iv)?;
+
+	let mut ciphersum = [0u8; 32];
+	let _ = cipher3.encrypt(&sum, &mut ciphersum)?;
+	
+	let ciphersum = ciphersum[0];
+	
+	serde_json::to_writer(&mut stream, &ciphersum)?;
 
 	break;
     }

@@ -7,7 +7,7 @@ use dcap_ql::quote::{Qe3CertDataPckCertChain, Quote3SignatureEcdsaP256};
 use openssl::{
     rand::rand_bytes,
     sha::sha256,
-    symm::{encrypt, encrypt_aead, Cipher},
+    symm::{encrypt, decrypt, encrypt_aead, Cipher},
     x509::*,
 };
 use std::{
@@ -229,8 +229,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("CLIENT > SERVER: Tenant PubKey and Encrypted Data");
     encl_conn.shutdown(std::net::Shutdown::Write)?;
 
-    let sum : u32 = serde_json::from_reader(&mut encl_conn)?;
-    println!("\n{}", sum);
+    let ciphersum : u8 = serde_json::from_reader(&mut encl_conn)?;
+    let ciphersum = [ciphersum];
+
+    let sum = decrypt(Cipher::aes_256_ctr(), &encr_key, Some(&iv), &ciphersum)?;
+    let sum = &sum[0];
+
+    println!("\n{:?}", sum);
 
     Ok(())
 }

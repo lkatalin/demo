@@ -150,26 +150,26 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // TODO: add report parsing to Fortanix dcap-ql/quote.rs
     // The compressed EC key is 33 bytes long.
-    let peer_pub_bytes = &enclave_report[320..353];
-
+//    let peer_pub_bytes = &enclave_report[320..353];
+    let peer_pub_pkey = key::Key::new_from_bytes(&enclave_report[320..353])?;
 
     // Convert the enclave's public key to an openssl::PKey.
-    let mut ctx = openssl::bn::BigNumContext::new()?; 
-    let curve = openssl::ec::EcGroup::from_curve_name(
-	openssl::nid::Nid::X9_62_PRIME256V1
-    )?;
-    let peer_pub_ecpoint = openssl::ec::EcPoint::from_bytes(
-    	curve.as_ref(),
-    	&peer_pub_bytes,
-    	&mut*ctx
-    )?;
-    let peer_pub_eckey = openssl::ec::EcKey::from_public_key(
-	curve.as_ref(),
-	peer_pub_ecpoint.as_ref()
-    )?;
-    let peer_pub_pkey = openssl::pkey::PKey::from_ec_key(
-	peer_pub_eckey
-    )?;
+    //let mut ctx = openssl::bn::BigNumContext::new()?; 
+    //let curve = openssl::ec::EcGroup::from_curve_name(
+//	openssl::nid::Nid::X9_62_PRIME256V1
+//    )?;
+//    let peer_pub_ecpoint = openssl::ec::EcPoint::from_bytes(
+//    	curve.as_ref(),
+//    	&peer_pub_bytes,
+//    	&mut*ctx
+//    )?;
+//    let peer_pub_eckey = openssl::ec::EcKey::from_public_key(
+//	curve.as_ref(),
+//	peer_pub_ecpoint.as_ref()
+ //   )?;
+ //   let peer_pub_pkey = openssl::pkey::PKey::from_ec_key(
+//	peer_pub_eckey
+//    )?;
 
     // TODO: When the key.rs functions can return an EC key, this will be usable,
     // but that requires some refactoring
@@ -177,18 +177,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let tenant_pubkey_bytes = tenant_eckey_pair.return_pubkey_bytes()?;
 
     // Generate tenant key
-    //let group = openssl::ec::EcGroup::from_curve_name(openssl::nid::Nid::X9_62_PRIME256V1)?;
-    //let tenant_eckey_priv = openssl::ec::EcKey::generate(&group)?;
-    //let tenant_pkey_priv = openssl::pkey::PKey::from_ec_key(tenant_eckey_priv.clone())?;
-    //let tenant_eckey_pub = openssl::ec::EcKey::from_public_key(&group, tenant_eckey_priv.as_ref().public_key())?;
-    //let mut new_ctx = openssl::bn::BigNumContext::new()?;
-    //let tenant_pubkey_bytes = tenant_eckey_pub.public_key().to_bytes(
-    //	&curve,
-    //	openssl::ec::PointConversionForm::UNCOMPRESSED,
-    //	&mut*new_ctx,
-    //)?;
-
-    let shared_secret = tenant_eckey_pair.derive_shared_secret(&peer_pub_pkey)?;
+    let shared_secret = tenant_eckey_pair.derive_shared_secret(&peer_pub_pkey.return_pubkey())?;
 
     // TODO: Put all of these functions in key.rs instead of here
     // Derive shared secret

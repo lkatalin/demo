@@ -7,7 +7,7 @@ use dcap_ql::quote::{Qe3CertDataPckCertChain, Quote3SignatureEcdsaP256};
 use openssl::{
     rand::rand_bytes,
     sha::sha256,
-    symm::{encrypt, decrypt, encrypt_aead, Cipher},
+    symm::{encrypt, decrypt, Cipher},
     x509::*,
 };
 use std::{
@@ -48,7 +48,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let cert_chain_file_contents =
         fs::read_to_string(&cert_chain_file[..]).expect("PCK cert chain file path invalid.");
 
-    // These arguments are supplied by the tenant. They are the data transmitted to the enclave.
+    // These arguments are supplied by the tenant. They are the data that will be transmitted to the enclave.
     let val1 = env::args()
         .nth(2)
         .expect("You must supply two integers.").parse::<i32>()?;
@@ -60,16 +60,16 @@ fn main() -> Result<(), Box<dyn Error>> {
     if val1 < 0 || val2 < 0 {
     	panic!("The two integers supplied must be positive.");
     }
-    // TODO: Make these u32s
+    // TODO: Make these u32s to add larger numbers!
     let val1 = val1 as u8;
     let val2 = val2 as u8;
 
     // The tenant requests attestation from the platform's attestation daemon.
-    // The actual signal is arbitrary.
     let daemon_conn = TcpStream::connect(DAEMON_CONN)?;
+    // TODO: Probably switch this to a serde_json::writer and reader for consistency.
     let mut daemon_buf = BufStream::new(daemon_conn);
 
-    // TODO: Send request by sending pub key
+    // TODO: Send request by sending the tenant's pub key!
     daemon_buf.write(&b"Request attestation"[..])?;
 
     // The tenant receives a Quote from the platform's attestation
@@ -106,7 +106,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         &quote_pck_leaf_cert,
     );
     cert_chain.len_ok()?;
-    //println!("Tenant's PCK cert chain loaded...");
 
     // The PCK certificate chain's issuers and signatures are verified.
     cert_chain.verify_issuers()?;
@@ -117,7 +116,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     let attestation_key = key::Key::new_from_xy(&q_att_key_pub)?;
     let quote_signature = sig::Signature::try_from(q_enclave_report_sig)?.to_der_vec()?;
     attestation_key.verify_sig(&att_key_signed_material, &quote_signature)?;
-    //println!("AK signature on Quote header || report body is valid...");
     println!("CLIENT: 	 Quote signature OK");
 
     // The PCK's signature on the Attestation Public Key is verified.
@@ -126,7 +124,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     pc_key
         .borrow()
         .verify_sig(&q_qe_report, &qe_report_signature)?;
-    //println!("PCK signature on AK is valid...");
     println!("CLIENT: 	 Attestation Key signature OK");
 
     // This verifies that the hashed material signed by the PCK is correct.
@@ -136,35 +133,31 @@ fn main() -> Result<(), Box<dyn Error>> {
     pc_key
         .borrow()
         .verify_hash(hashed_reportdata, unhashed_data)?;
-    //println!("QE Report's hash is valid....");
     println!("CLIENT: 	 Enclave report hash OK");
 
-    //println!("\nQuote verified.");
     println!("\nCLIENT: 	 Attestation Complete");
 
     // The ECDH key exchange between the tenant and the enclave establishes a secure communication channel
-    // between them in order to send code and data to the enclave securely after attestation.
-    // Temporarily we are using a placeholder key generated inside the tenant as the enclave's key (peer key)
-    // until the enclave has EC key generation capability via mbedTLS. In a real scenario, the peer key
-    // is extracted from the Quote's Report Data.
+    // between them in order to send (code and) data to the enclave securely after attestation.
 
     // TODO: add report parsing to Fortanix dcap-ql/quote.rs
     // The compressed EC key is 33 bytes long.
     let peer_pub_pkey = key::Key::new_from_bytes(&enclave_report[320..353])?;
 
-    // Generate tenant key
+    // The tenant generates its EC key pair.
     let tenant_eckey_pair = key::Key::new_pair_secp256r1()?;
     let tenant_pubkey_bytes = tenant_eckey_pair.return_pubkey_bytes()?;
 
-    // Derive shared secret
+    // The tenant derives a shared secret using its private key and the enclave's public key, then hashes
+    // this shared secret to created a symmetric key used for encrypting and decrypting communication with 
+    // the enclave.
     let shared_secret = tenant_eckey_pair.derive_shared_secret(&peer_pub_pkey.return_pubkey())?;
     let symm_key = sha256(&shared_secret);
  
-    // TODO: Is there a shorter way to write these two lines in Rust?
     let mut iv = [0u8; 16];
     rand_bytes(&mut iv)?;
 
-    // No additional auth data for now
+    // TODO: Change the Cipher to aes_128_gcm(). Currently this gives a key length error.
     //let _aad = [0u8; 8];
     //let mut _tag = [0u8; 16];
     //let _ciphertext = encrypt_aead(Cipher::aes_128_gcm(), &encr_key, Some(&iv), &aad, &ser_data, &mut tag).unwrap();
@@ -172,7 +165,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let ciphertext1 = encrypt(Cipher::aes_256_ctr(), &symm_key, Some(&iv), &[val1]).unwrap();
     let ciphertext2 = encrypt(Cipher::aes_256_ctr(), &symm_key, Some(&iv), &[val2]).unwrap();
 
-    // Sends encrypted data to the enclave for execution.
+    // The tenant sends encrypted data to the enclave for execution.
+    // TODO: Send code here too!
     let mut encl_conn = TcpStream::connect(ENCL_CONN)?;
     
     // Send the pub key and ciphertext
@@ -182,6 +176,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     serde_json::to_writer(&mut encl_conn, &ciphertext2)?;
     println!("CLIENT > SERVER: Tenant PubKey and Encrypted Data");
 
+    // The tenant receives the output of computation from the enclave and decrypts it.
     let ciphersum : u8 = serde_json::from_reader(&mut encl_conn)?;
     let ciphersum = [ciphersum];
 

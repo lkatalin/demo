@@ -30,16 +30,20 @@ impl Display for HashError {
 
 /// This Key is a wrapper for either an openssl::PKey<Public> or a (public, private) pair of PKeys
 /// with extra functionality, ex. the PKey can be created from raw x and y coordinates and verify
-/// a signature and SHA256 hash.
+/// a signature and SHA256 hash. The curve for all keys is SECP256R1 (known as PRIME256V1).
 pub struct Key {
+    curve: EcGroup,
     pubkey: PKey<Public>,
     privkey: Option<EcKey<Private>>,
 }
 
 impl Key {
+
     /// This creates a new public PKey from raw x and y coordinates for the SECP256R1 curve.
     /// The private key is not known or needed.
     pub fn new_from_xy(xy_coords: &[u8]) -> Result<Self, Box<dyn Error>> {
+	// TODO: Is it possible to give the Key a reference to this curve without instantiating it in each 
+	// Key instance? Rust doesn't do runtime-generated global variables.
         let curve = EcGroup::from_curve_name(Nid::X9_62_PRIME256V1)?;
         let mut x: [u8; 32] = Default::default();
         let mut y: [u8; 32] = Default::default();
@@ -51,11 +55,14 @@ impl Key {
         let pkey = PKey::from_ec_key(ec_key)?;
 
         Ok(Key {
+	    curve: curve, 
             pubkey: pkey,
             privkey: None,
         })
     }
 
+    /// This creates a new public PKey from bytes. This can reconstruct a public key sent
+    /// from an enclave, which uses mbedtls rather than openssl.
     pub fn new_from_bytes(bytes: &[u8]) -> Result<Self, Box<dyn Error>> {
 	let mut ctx = openssl::bn::BigNumContext::new()?;
 	let curve = EcGroup::from_curve_name(Nid::X9_62_PRIME256V1)?;
@@ -73,6 +80,7 @@ impl Key {
         )?; 
 
 	Ok(Key {
+	    curve: curve,
 	    pubkey: pub_pkey,
 	    privkey: None,
 	})
@@ -81,6 +89,7 @@ impl Key {
     /// This creates a new Key from existing PKey value.
     pub fn new_from_pubkey(pkey: PKey<Public>) -> Self {
         Key {
+	    curve: EcGroup::from_curve_name(Nid::X9_62_PRIME256V1).unwrap(),
             pubkey: pkey,
             privkey: None,
         }
@@ -98,26 +107,25 @@ impl Key {
         let eckey_pub = EcKey::from_public_key(&curve, eckey_priv.as_ref().public_key())?;
         let pkey_pub = PKey::from_ec_key(eckey_pub)?;
         Ok(Key {
+	    curve: curve,
             pubkey: pkey_pub,
             privkey: Some(eckey_priv),
         })
     }
 
+    /// Returns the Key's public key as a PKey<Public>
     pub fn return_pubkey(&self) -> &PKey<Public> {
         &self.pubkey
     }
 
+    /// Returns the Key's public key as bytes. This is useful for transmitting to the enclave, which
+    /// can reconstruct the key with mbedtls.
     pub fn return_pubkey_bytes(&self) -> Result<Vec<u8>, Box<dyn Error>> {
-	let curve = EcGroup::from_curve_name(Nid::X9_62_PRIME256V1)?;
 	let mut new_ctx = openssl::bn::BigNumContext::new()?;
 	let priv_key = self.privkey.as_ref().unwrap();
 
-	// TODO: this is redundant
-	let ec_pub_key = PKey::from_ec_key(priv_key.clone())?;
-	let eckey_pub = EcKey::from_public_key(&curve, priv_key.as_ref().public_key())?;
-
-	let tenant_pubkey_bytes = eckey_pub.public_key().to_bytes(
-        	&curve,
+	let tenant_pubkey_bytes = priv_key.public_key().to_bytes(
+        	&self.curve,
         	openssl::ec::PointConversionForm::UNCOMPRESSED,
         	&mut*new_ctx,
         )?;

@@ -1,6 +1,14 @@
+use serde_json::{
+    from_reader,
+    to_writer,
+};
 use std::error::Error;
 use std::io::Write;
-use std::net::{TcpListener, TcpStream};
+use std::net::{
+    Shutdown,
+    TcpListener, 
+    TcpStream
+};
 
 const LISTENER_CONN: &'static str = "localhost:1052";
 const ENCLAVE_CONN: &'static str = "localhost:1050";
@@ -14,29 +22,30 @@ fn main() -> Result<(), Box<dyn Error>> {
     // The attestation daemon handles each incoming connection from a tenant. The tenant, by
     // connecting, is requesting an attestation of the enclave.
     for incoming_tenant_stream in TcpListener::bind(LISTENER_CONN)?.incoming() {
-        // The attestation daemon retrieves the Quoting Enclave's Target Info from the CPU and
+        
+	// The attestation daemon retrieves the Quoting Enclave's Target Info from the CPU and
         // sends the Quoting Enclave's Target Info to the enclave. This Target Info will be
         // used as the target for the enclave's attestation Report.
         let qe_ti = dcap_ql::target_info().expect("Could not retrieve QE target info.");
-        //let serialized_qe_ti = serde_json::to_string(&qe_ti)?;
-        let mut enclave_stream = TcpStream::connect(ENCLAVE_CONN)?;
-        //enclave_stream.write(&serialized_qe_ti.as_bytes())?;
-	serde_json::to_writer(&mut enclave_stream, &qe_ti)?;
-	enclave_stream.shutdown(std::net::Shutdown::Write)?;	
+        
+	let mut enclave_stream = TcpStream::connect(ENCLAVE_CONN)?;
+	to_writer(&mut enclave_stream, &qe_ti)?;
+	enclave_stream.shutdown(Shutdown::Write)?;	
 
         // The attestation daemon receives the Report back from the attesting enclave.
-        let report: sgx_isa::Report = serde_json::from_reader(enclave_stream)?;
+        let report: sgx_isa::Report = from_reader(enclave_stream)?;
 
         // The attestation daemon gets a Quote from the Quoting Enclave for the Report.
         // The Quoting Enclave verifies the Report's MAC as a prerequisite for generating
         // the Quote. The Quote is signed with the Quoting Enclave's Attestation Key.
         let quote = dcap_ql::quote(&report).expect("Could not generate quote.");
 
-        // The attestation daemon sends the Quote to the tenant.
+        // The attestation daemon sends the Quote to the tenant. The Quote is already a Vec<u8>
+	// and does not need serialization.
         let mut tenant_stream = incoming_tenant_stream?;
         tenant_stream.write(&quote)?;
 
-        println!("\nQuote successfully generated and sent to tenant...");
+        println!("\nQuote successfully generated and sent to tenant.");
     }
     Ok(())
 }

@@ -173,33 +173,29 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // TODO: When the key.rs functions can return an EC key, this will be usable,
     // but that requires some refactoring
-    //let tenant_eckey_pair = key::Key::new_pair_secp256r1()?;
-    //let tenant_eckey_pub = tenant_eckey_pair.return_pubkey();
+    let tenant_eckey_pair = key::Key::new_pair_secp256r1()?;
+    let tenant_pubkey_bytes = tenant_eckey_pair.return_pubkey_bytes()?;
 
     // Generate tenant key
-    let group = openssl::ec::EcGroup::from_curve_name(openssl::nid::Nid::X9_62_PRIME256V1)?;
-    let tenant_eckey_priv = openssl::ec::EcKey::generate(&group)?;
-    let tenant_pkey_priv = openssl::pkey::PKey::from_ec_key(tenant_eckey_priv.clone())?;
-    let tenant_eckey_pub = openssl::ec::EcKey::from_public_key(&group, tenant_eckey_priv.as_ref().public_key())?;
-    let mut new_ctx = openssl::bn::BigNumContext::new()?;
-    let tenant_pubkey_bytes = tenant_eckey_pub.public_key().to_bytes(
-    	&curve,
-    	openssl::ec::PointConversionForm::UNCOMPRESSED,
-    	&mut*new_ctx,
-    )?;
+    //let group = openssl::ec::EcGroup::from_curve_name(openssl::nid::Nid::X9_62_PRIME256V1)?;
+    //let tenant_eckey_priv = openssl::ec::EcKey::generate(&group)?;
+    //let tenant_pkey_priv = openssl::pkey::PKey::from_ec_key(tenant_eckey_priv.clone())?;
+    //let tenant_eckey_pub = openssl::ec::EcKey::from_public_key(&group, tenant_eckey_priv.as_ref().public_key())?;
+    //let mut new_ctx = openssl::bn::BigNumContext::new()?;
+    //let tenant_pubkey_bytes = tenant_eckey_pub.public_key().to_bytes(
+    //	&curve,
+    //	openssl::ec::PointConversionForm::UNCOMPRESSED,
+    //	&mut*new_ctx,
+    //)?;
 
-    //let shared_secret = tenant_eckey_pair.derive_shared_secret(&peer_pub_pkey)?;
+    let shared_secret = tenant_eckey_pair.derive_shared_secret(&peer_pub_pkey)?;
 
     // TODO: Put all of these functions in key.rs instead of here
     // Derive shared secret
-    let mut deriver = openssl::derive::Deriver::new(tenant_pkey_priv.as_ref())?;
-    deriver.set_peer(&peer_pub_pkey)?;
-    let shared_secret = deriver.derive_to_vec()?;
-    let encr_key = sha256(&shared_secret);
-
-    // the data has to be serialized because it needs to be converted to Vec<u8> to be
-    // passed in to the encryption function
-    //let ser_data = serde_json::to_vec(&data)?; 
+    //let mut deriver = openssl::derive::Deriver::new(tenant_pkey_priv.as_ref())?;
+    //deriver.set_peer(&peer_pub_pkey)?;
+    //let shared_secret = deriver.derive_to_vec()?;
+    let symm_key = sha256(&shared_secret);
 
     // Encrypts vector of values entered by user.
     
@@ -210,16 +206,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     let _aad = [0u8; 8];
     let mut _tag = [0u8; 16];
     //let _ciphertext = encrypt_aead(Cipher::aes_128_gcm(), &encr_key, Some(&iv), &aad, &ser_data, &mut tag).unwrap();
-    let ciphertext1 = encrypt(Cipher::aes_256_ctr(), &encr_key, Some(&iv), &[val1]).unwrap();
-    let ciphertext2 = encrypt(Cipher::aes_256_ctr(), &encr_key, Some(&iv), &[val2]).unwrap();
+    let ciphertext1 = encrypt(Cipher::aes_256_ctr(), &symm_key, Some(&iv), &[val1]).unwrap();
+    let ciphertext2 = encrypt(Cipher::aes_256_ctr(), &symm_key, Some(&iv), &[val2]).unwrap();
 
     // Sends encrypted data to the enclave for execution.
     let mut encl_conn = TcpStream::connect(ENCL_CONN)?;
     
     // Send the pub key
-    let tenant_pkey_pub = openssl::pkey::PKey::from_ec_key(tenant_eckey_pub.clone())?;
-    let tenant_pkey_pub_der = tenant_pkey_pub.public_key_to_der()?;
-    //serde_json::to_writer(&mut encl_conn, &tenant_pkey_pub_der)?;
     serde_json::to_writer(&mut encl_conn, &tenant_pubkey_bytes)?;
 
     // Send ciphertext
@@ -232,7 +225,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let ciphersum : u8 = serde_json::from_reader(&mut encl_conn)?;
     let ciphersum = [ciphersum];
 
-    let sum = decrypt(Cipher::aes_256_ctr(), &encr_key, Some(&iv), &ciphersum)?;
+    let sum = decrypt(Cipher::aes_256_ctr(), &symm_key, Some(&iv), &ciphersum)?;
     let sum = &sum[0];
 
     println!("\n{:?}", sum);

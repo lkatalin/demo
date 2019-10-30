@@ -33,12 +33,12 @@ impl Display for HashError {
 /// a signature and SHA256 hash.
 pub struct Key {
     pubkey: PKey<Public>,
-    privkey: Option<PKey<Private>>,
-    //eckeypub: Option<EcKey<Public>>,
+    privkey: Option<EcKey<Private>>,
 }
 
 impl Key {
     /// This creates a new public PKey from raw x and y coordinates for the SECP256R1 curve.
+    /// The private key is not known or needed.
     pub fn new_from_xy(xy_coords: &[u8]) -> Result<Self, Box<dyn Error>> {
         let group = EcGroup::from_curve_name(Nid::X9_62_PRIME256V1)?;
         let mut x: [u8; 32] = Default::default();
@@ -66,17 +66,18 @@ impl Key {
 
     /// This creates a new elliptic curve key pair for the SECP256R1 curve with no other inputs.
     /// These are then converted to PKeys, which can be used for a DH key exchange according to
-    /// https://github.com/sfackler/rust-openssl/blob/master/openssl/src/pkey.rs#L16.
+    /// https://github.com/sfackler/rust-openssl/blob/master/openssl/src/pkey.rs#L16. The EcKey type
+    /// as the private key allows the public key to be returned as bytes in return_pubkey_bytes().
     // TODO: Is this a good curve to use for ECDH keys?
     pub fn new_pair_secp256r1() -> Result<Self, Box<dyn Error>> {
         let group = EcGroup::from_curve_name(Nid::X9_62_PRIME256V1)?;
         let eckey_priv = EcKey::generate(&group)?;
-        let pkey_priv = PKey::from_ec_key(eckey_priv.clone())?;
+        //let pkey_priv = PKey::from_ec_key(eckey_priv.clone())?;
         let eckey_pub = EcKey::from_public_key(&group, eckey_priv.as_ref().public_key())?;
         let pkey_pub = PKey::from_ec_key(eckey_pub)?;
         Ok(Key {
             pubkey: pkey_pub,
-            privkey: Some(pkey_priv),
+            privkey: Some(eckey_priv),
         })
     }
 
@@ -84,10 +85,29 @@ impl Key {
         &self.pubkey
     }
 
+    pub fn return_pubkey_bytes(&self) -> Result<Vec<u8>, Box<dyn Error>> {
+	let curve = EcGroup::from_curve_name(Nid::X9_62_PRIME256V1)?;
+	let mut new_ctx = openssl::bn::BigNumContext::new()?;
+	let priv_key = self.privkey.as_ref().unwrap();
+
+	// TODO: this is redundant
+	let ec_pub_key = PKey::from_ec_key(priv_key.clone())?;
+	let eckey_pub = EcKey::from_public_key(&curve, priv_key.as_ref().public_key())?;
+
+	let tenant_pubkey_bytes = eckey_pub.public_key().to_bytes(
+        	&curve,
+        	openssl::ec::PointConversionForm::UNCOMPRESSED,
+        	&mut*new_ctx,
+        )?;
+
+	Ok(tenant_pubkey_bytes )
+    }
+
     /// DHKE deriving shared secret between self's private key and peer's public key.
     pub fn derive_shared_secret(&self, peer_key: &PKey<Public>) -> Result<Vec<u8>, Box<dyn Error>> {
-        let priv_key = self.privkey.as_ref().unwrap();
-        let mut deriver = Deriver::new(priv_key)?;
+        let ec_priv_key = self.privkey.as_ref().unwrap();
+	let pkey_priv_key = PKey::from_ec_key(ec_priv_key.clone())?;
+        let mut deriver = Deriver::new(pkey_priv_key.as_ref())?;
         deriver.set_peer(peer_key)?;
         Ok(deriver.derive_to_vec()?)
     }

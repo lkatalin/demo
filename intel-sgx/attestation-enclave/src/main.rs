@@ -6,7 +6,6 @@ use serde_json::{
 };
 use std::{
     error::Error,
-    io::{Read, Write},
     net::TcpListener,
 };
 use mbedtls::{
@@ -103,54 +102,51 @@ fn main() -> Result<(), Box<dyn Error>> {
         break;
     }
 
+    // The enclave handles each incoming connection from the tenant. These channels between the tenant
+    // and enclave are established after attestation is verified and all data exchanged between the tenant
+    // and enclave after public keys are exchanged is encrypted with a shared symmetric key.
     for stream in tenant_streams.incoming() {
 	let mut stream = stream?;
 
-	// Receive and deserialize tenant pub key, iv, ciphertext	
+	// The enclave receives and deserializes tenant pub key, iv, ciphertext.	
 	let deserializer = Deserializer::from_reader(stream.try_clone().unwrap());
    	let mut iterator = deserializer.into_iter::<Vec<u8>>();
 	
-	// TODO: More concise way to do this?
 	let tenant_key = iterator.next().unwrap()?;
 	let iv = iterator.next().unwrap()?;
 	let ciphertext1 = iterator.next().unwrap()?;
 	let ciphertext2 = iterator.next().unwrap()?;
 
-	// Generate shared secret
-	let ecgroup = EcGroup::new(EcGroupId::SecP256R1)?;
-	let tenant_pubkey_ecpoint = EcPoint::from_binary(&ecgroup, &tenant_key)?;
-	let tenant_pubkey = Pk::public_from_ec_components(ecgroup.clone(), tenant_pubkey_ecpoint)?;
-
-	let mut entropy = Rdseed;
-	let mut rng2 = CtrDrbg::new(&mut entropy, None)?;
+	// The enclave generates a shared secret with the tenant. A SHA256 hash of this shared secret
+	// is used as the symmetric key for encryption and decryption of data.
+	let tenant_pubkey_ecpoint = EcPoint::from_binary(&curve, &tenant_key)?;
+	let tenant_pubkey = Pk::public_from_ec_components(curve.clone(), tenant_pubkey_ecpoint)?;
 	
 	let mut shared_secret = [0u8; 32]; // 256 / 8
 	ec_key.agree(
 	    &tenant_pubkey,
             &mut shared_secret,
-            &mut rng2
+            &mut rng
 	)?;
 
 	let mut symm_key = [0u8; 32];
-
 	Md::hash(Sha256, &shared_secret, &mut symm_key)?;
 
-	// Decrypts ciphertext
-
-	// Create cipher instances for two decryption operations and one encryption operation.
+	// These cipher instances are used for decryption operations and one encryption operation.
 	let decrypt_cipher_1 = new_aes256ctr_decrypt_cipher(&symm_key, &iv)?;
 	let decrypt_cipher_2 = new_aes256ctr_decrypt_cipher(&symm_key, &iv)?;
 	let encrypt_cipher = new_aes256ctr_encrypt_cipher(&symm_key, &iv)?;
 
 	let mut plaintext1 = [0u8; 32]; 
 	let mut plaintext2 = [0u8; 32]; 
-
 	let _ = decrypt_cipher_1.decrypt(&ciphertext1, &mut plaintext1)?;
 	let _ = decrypt_cipher_2.decrypt(&ciphertext2, &mut plaintext2)?;
 
+	// TODO: Not have to index into this?
 	let plaintext1 = plaintext1[0];
 	let plaintext2 = plaintext2[0];
 
+	// The sum of the two plaintexts is calculated. The sum is encrypted and sent back to the tenant.
         let mut sum: Vec<u8> = Vec::new(); 
 	sum.push(plaintext1 + plaintext2);
 
@@ -158,11 +154,12 @@ fn main() -> Result<(), Box<dyn Error>> {
 
 	let mut ciphersum = [0u8; 32];
 	let _ = encrypt_cipher.encrypt(&sum, &mut ciphersum)?;
-	
 	let ciphersum = ciphersum[0];
 	
 	to_writer(&mut stream, &ciphersum)?;
-
+    
+	// TODO: This line exits the program after one run. Otherwise, it appears as though the tenant can be run
+	// again, but instead the program just hangs the second time. Why?
 	break;
     }
 
